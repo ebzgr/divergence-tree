@@ -240,18 +240,18 @@ def step1_generate_and_save_data():
         region_type_test,
         functional_form,
     ) = generate_data(
-        n_users_train=20000,
-        n_users_test=10000,
-        k=3,
-        n_categories=[6, 6, 6],
-        m_firm=10,
-        m_user=10,
-        similarity=0.8,
+        n_users_train=50000,
+        n_users_test=25000,
+        k=2,
+        n_categories=[5]*2,
+        m_firm=4,
+        m_user=4,
+        similarity=0.5,
         intensity=1,
-        effect_noise_std=3,
-        firm_outcome_noise_std=4,
-        user_outcome_noise_std=4,
-        positive_ratio=0.6,
+        effect_noise_std=1,
+        firm_outcome_noise_std=1,
+        user_outcome_noise_std=1,
+        positive_ratio=0.2,
         random_seed=RANDOM_SEED,
     )
 
@@ -343,7 +343,7 @@ def step2_run_divergence_tree():
         "eps_scale": 1e-8,
     }
     search_space = {
-        "max_partitions": {"low": 4, "high": 100},
+        "max_partitions": {"low": 4, "high": 50},
         "min_improvement_ratio": {"low": 0.001, "high": 0.1, "log": True},
     }
 

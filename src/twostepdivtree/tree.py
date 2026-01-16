@@ -122,6 +122,93 @@ class TwoStepDivergenceTree:
         self.tauC_: Optional[np.ndarray] = None
         self.region_types_: Optional[np.ndarray] = None
         self._fit_data: Dict[str, Any] = {}
+    
+    def _fit_classification_tree_step(
+        self,
+        X: np.ndarray,
+        auto_tune_classification_tree: Optional[bool] = None,
+        classification_tree_tune_n_trials: Optional[int] = None,
+        classification_tree_tune_n_splits: Optional[int] = None,
+        classification_tree_scoring: str = "accuracy",
+        verbose: bool = True,
+    ) -> None:
+        """
+        Internal method to fit the classification tree (step 2) when CausalForests are already set.
+        
+        This is used when CausalForests have been pre-built and we only need to train
+        the classification tree. Requires that causal_forest_F_ and causal_forest_C_
+        are already set and fitted.
+        
+        Parameters
+        ----------
+        X : np.ndarray of shape (n_samples, n_features)
+            Feature matrix.
+        auto_tune_classification_tree : bool, optional
+            If True or None, automatically tunes the classification tree hyperparameters.
+            If False, uses the provided `classification_tree_params`.
+        classification_tree_tune_n_trials : int, optional
+            Number of Optuna trials for classification tree tuning. Default: 30.
+        classification_tree_tune_n_splits : int, optional
+            Number of CV folds for classification tree tuning. Default: 5.
+        classification_tree_scoring : str, default="accuracy"
+            Scoring function for classification tree tuning.
+        verbose : bool, default=True
+            Whether to show progress output.
+        """
+        if self.causal_forest_F_ is None or self.causal_forest_C_ is None:
+            raise ValueError("CausalForests must be set before calling _fit_classification_tree_step")
+        
+        X = np.asarray(X)
+        
+        # Store fit data
+        if "X" not in self._fit_data:
+            self._fit_data["X"] = X
+        
+        # Default to True if None
+        if auto_tune_classification_tree is None:
+            auto_tune_classification_tree = True
+        
+        # Predict treatment effects for all observations
+        if verbose:
+            print("Predicting treatment effects using pre-built CausalForests...")
+        self.tauF_ = self.causal_forest_F_.effect(X)
+        self.tauC_ = self.causal_forest_C_.effect(X)
+        
+        # Categorize observations into 4 region types
+        if verbose:
+            print("Categorizing observations into region types...")
+        self.region_types_ = self._categorize_region_types(self.tauF_, self.tauC_)
+        
+        # Train classification tree (with optional auto-tuning)
+        if auto_tune_classification_tree:
+            if verbose:
+                print("Auto-tuning classification tree hyperparameters...")
+            ct_params, ct_score = self._tune_classification_tree(
+                X, 
+                self.region_types_,
+                n_trials=classification_tree_tune_n_trials,
+                n_splits=classification_tree_tune_n_splits,
+                scoring=classification_tree_scoring,
+                verbose=verbose,
+            )
+            if verbose:
+                if classification_tree_scoring == "accuracy":
+                    print(f"  Best classification tree accuracy: {ct_score:.6f}")
+                else:
+                    print(f"  Best classification tree {classification_tree_scoring}: {ct_score:.6f}")
+            # Update classification_tree_params with tuned values
+            self.classification_tree_params.update(ct_params)
+        else:
+            if verbose:
+                print("Training classification tree with provided parameters...")
+        
+        self.classification_tree_ = DecisionTreeClassifier(
+            **self.classification_tree_params
+        )
+        self.classification_tree_.fit(X, self.region_types_)
+        
+        if verbose:
+            print("Classification tree fitting complete!")
 
     def fit(
         self,
@@ -130,6 +217,11 @@ class TwoStepDivergenceTree:
         YF: np.ndarray,
         YC: np.ndarray,
         auto_tune_classification_tree: Optional[bool] = None,
+        classification_tree_tune_n_trials: Optional[int] = None,
+        classification_tree_tune_n_splits: Optional[int] = None,
+        classification_tree_scoring: str = "accuracy",
+        treatment_probability: Optional[np.ndarray] = None,
+        verbose: bool = True,
     ) -> "TwoStepDivergenceTree":
         """
         Fit the two-step divergence tree.
@@ -147,6 +239,21 @@ class TwoStepDivergenceTree:
         auto_tune_classification_tree : bool, optional
             If True or None, automatically tunes the classification tree hyperparameters.
             If False, uses the provided `classification_tree_params`.
+        classification_tree_tune_n_trials : int, optional
+            Number of Optuna trials for classification tree tuning. Default: 30.
+        classification_tree_tune_n_splits : int, optional
+            Number of CV folds for classification tree tuning. Default: 5.
+        classification_tree_scoring : str, default="accuracy"
+            Scoring function for classification tree tuning. Options:
+            - "accuracy": Classification accuracy (maximize)
+            - "fnr_region_1", "fnr_region_2", "fnr_region_3", "fnr_region_4": 
+              False Negative Rate for the specified region (minimize)
+        treatment_probability : np.ndarray of shape (n_samples,), optional
+            Treatment assignment probability (propensity score) for each observation.
+            If provided, will be passed to CausalForestDML.fit() methods.
+            If None, CausalForestDML will estimate it from the data.
+        verbose : bool, default=True
+            Whether to show progress output. Set to False to suppress output.
 
         Returns
         -------
@@ -169,6 +276,19 @@ class TwoStepDivergenceTree:
         if not np.all(np.isin(T, [0, 1])):
             raise ValueError("T must be in {0,1}.")
 
+        # Validate treatment probability if provided
+        if treatment_probability is not None:
+            treatment_probability = np.asarray(treatment_probability)
+            if treatment_probability.ndim != 1 or len(treatment_probability) != n:
+                raise ValueError(
+                    f"treatment_probability must be 1D array of length {n}, "
+                    f"got shape {treatment_probability.shape}"
+                )
+            if np.any(treatment_probability < 0) or np.any(treatment_probability > 1):
+                raise ValueError(
+                    "treatment_probability must be between 0 and 1 for all values"
+                )
+
         # Store fit data
         self._fit_data = dict(X=X, T=T, YF=YF, YC=YC)
 
@@ -177,7 +297,8 @@ class TwoStepDivergenceTree:
             auto_tune_classification_tree = True
 
         # Step 1: Fit firm causal forest (with optional tuning)
-        print("Fitting causal forest for firm outcome (YF)...")
+        if verbose:
+            print("Fitting causal forest for firm outcome (YF)...")
         
         # Handle NaN values for YF
         valid_F = ~np.isnan(YF)
@@ -187,14 +308,26 @@ class TwoStepDivergenceTree:
         # Create causal forest for firm outcome
         self.causal_forest_F_ = CausalForestDML(**self.causal_forest_params)
         
+        # Prepare treatment probability for firm causal forest if provided
+        fit_kwargs_F = {}
+        tune_kwargs_F = {}
+        if treatment_probability is not None:
+            # Pass treatment probability to fit and tune methods
+            # In econml, CausalForestDML can accept propensity scores through the W parameter
+            # W is typically for confounders, but can include propensity scores
+            # Reshape to (n_samples, 1) as econml expects 2D array for W
+            fit_kwargs_F["W"] = treatment_probability[valid_F].reshape(-1, 1)
+            tune_kwargs_F["W"] = treatment_probability[valid_F].reshape(-1, 1)
+        
         # Tune if tune params are provided
         if self.causal_forest_tune_params:
-            print("  Tuning firm causal forest hyperparameters...")
+            if verbose:
+                print("  Tuning firm causal forest hyperparameters...")
             self.causal_forest_F_.tune(
                 Y=YF[valid_F],
                 T=T[valid_F],
                 X=X[valid_F],
-                **self.causal_forest_tune_params
+                **{**self.causal_forest_tune_params, **tune_kwargs_F}
             )
         
         # Fit firm causal forest
@@ -202,10 +335,12 @@ class TwoStepDivergenceTree:
             Y=YF[valid_F],
             T=T[valid_F],
             X=X[valid_F],
+            **fit_kwargs_F
         )
 
         # Step 2: Fit user causal forest (with optional tuning)
-        print("Fitting causal forest for consumer outcome (YC)...")
+        if verbose:
+            print("Fitting causal forest for consumer outcome (YC)...")
         
         # Handle NaN values for YC
         valid_C = ~np.isnan(YC)
@@ -215,14 +350,23 @@ class TwoStepDivergenceTree:
         # Create causal forest for user outcome
         self.causal_forest_C_ = CausalForestDML(**self.causal_forest_params)
         
+        # Prepare treatment probability for consumer causal forest if provided
+        fit_kwargs_C = {}
+        tune_kwargs_C = {}
+        if treatment_probability is not None:
+            # Pass treatment probability to fit and tune methods
+            fit_kwargs_C["W"] = treatment_probability[valid_C].reshape(-1, 1)
+            tune_kwargs_C["W"] = treatment_probability[valid_C].reshape(-1, 1)
+        
         # Tune if tune params are provided
         if self.causal_forest_tune_params:
-            print("  Tuning user causal forest hyperparameters...")
+            if verbose:
+                print("  Tuning user causal forest hyperparameters...")
             self.causal_forest_C_.tune(
                 Y=YC[valid_C],
                 T=T[valid_C],
                 X=X[valid_C],
-                **self.causal_forest_tune_params
+                **{**self.causal_forest_tune_params, **tune_kwargs_C}
             )
         
         # Fit user causal forest
@@ -230,35 +374,50 @@ class TwoStepDivergenceTree:
             Y=YC[valid_C],
             T=T[valid_C],
             X=X[valid_C],
+            **fit_kwargs_C
         )
 
         # Predict treatment effects for all observations
-        print("Predicting treatment effects...")
+        if verbose:
+            print("Predicting treatment effects...")
         self.tauF_ = self.causal_forest_F_.effect(X)
         self.tauC_ = self.causal_forest_C_.effect(X)
 
         # Step 2: Categorize observations into 4 region types
-        print("Categorizing observations into region types...")
+        if verbose:
+            print("Categorizing observations into region types...")
         self.region_types_ = self._categorize_region_types(self.tauF_, self.tauC_)
 
         # Step 3: Train classification tree (with optional auto-tuning)
         if auto_tune_classification_tree:
-            print("Auto-tuning classification tree hyperparameters...")
-            ct_params, ct_accuracy = self._tune_classification_tree(
-                X, self.region_types_
+            if verbose:
+                print("Auto-tuning classification tree hyperparameters...")
+            ct_params, ct_score = self._tune_classification_tree(
+                X, 
+                self.region_types_,
+                n_trials=classification_tree_tune_n_trials,
+                n_splits=classification_tree_tune_n_splits,
+                scoring=classification_tree_scoring,
+                verbose=verbose,
             )
-            print(f"  Best classification tree accuracy: {ct_accuracy:.6f}")
+            if verbose:
+                if classification_tree_scoring == "accuracy":
+                    print(f"  Best classification tree accuracy: {ct_score:.6f}")
+                else:
+                    print(f"  Best classification tree {classification_tree_scoring}: {ct_score:.6f}")
             # Update classification_tree_params with tuned values
             self.classification_tree_params.update(ct_params)
         else:
-            print("Training classification tree with provided parameters...")
+            if verbose:
+                print("Training classification tree with provided parameters...")
 
         self.classification_tree_ = DecisionTreeClassifier(
             **self.classification_tree_params
         )
         self.classification_tree_.fit(X, self.region_types_)
 
-        print("Two-step divergence tree fitting complete!")
+        if verbose:
+            print("Two-step divergence tree fitting complete!")
         return self
 
     def _categorize_region_types(
@@ -303,16 +462,17 @@ class TwoStepDivergenceTree:
 
         return region_types
 
-    def _region_type_cv_accuracy(
+    def _region_type_cv_score(
         self,
         X: np.ndarray,
         region_types: np.ndarray,
         params: Dict[str, Any],
+        scoring: str = "accuracy",
         n_splits: int = 5,
         random_state: Optional[int] = None,
     ) -> float:
         """
-        Compute K-fold cross-validated region type classification accuracy.
+        Compute K-fold cross-validated score for region type classification.
 
         Parameters
         ----------
@@ -322,6 +482,11 @@ class TwoStepDivergenceTree:
             Region type labels (1-4).
         params : dict
             Hyperparameters for DecisionTreeClassifier.
+        scoring : str, default="accuracy"
+            Scoring function. Options:
+            - "accuracy": Classification accuracy
+            - "fnr_region_1", "fnr_region_2", "fnr_region_3", "fnr_region_4": 
+              False Negative Rate for the specified region
         n_splits : int, default=5
             Number of folds for cross-validation.
         random_state : int, optional
@@ -330,7 +495,9 @@ class TwoStepDivergenceTree:
         Returns
         -------
         float
-            Mean cross-validated classification accuracy across all folds.
+            Mean cross-validated score across all folds.
+            For accuracy: higher is better (0-1 range).
+            For FNR: lower is better (0-1 range), returned as negative value for minimization.
         """
         n = X.shape[0]
         if len(region_types) != n:
@@ -338,30 +505,72 @@ class TwoStepDivergenceTree:
                 f"Input arrays must have matching lengths: X={n}, region_types={len(region_types)}"
             )
 
+        # Parse scoring function
+        if scoring == "accuracy":
+            compute_fnr = False
+            target_region = None
+        elif scoring.startswith("fnr_region_"):
+            compute_fnr = True
+            try:
+                target_region = int(scoring.split("_")[-1])
+                if target_region not in [1, 2, 3, 4]:
+                    raise ValueError(f"Invalid region: {target_region}. Must be 1, 2, 3, or 4.")
+            except (ValueError, IndexError):
+                raise ValueError(f"Invalid scoring function: {scoring}. Expected 'accuracy' or 'fnr_region_X' where X is 1-4.")
+        else:
+            raise ValueError(f"Invalid scoring function: {scoring}. Expected 'accuracy' or 'fnr_region_X' where X is 1-4.")
+
         kf = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
-        accuracies = []
+        scores = []
 
         for train_idx, val_idx in kf.split(X):
             try:
                 clf = DecisionTreeClassifier(**params)
                 clf.fit(X[train_idx], region_types[train_idx])
                 pred = clf.predict(X[val_idx])
-                acc = accuracy_score(region_types[val_idx], pred)
-                accuracies.append(acc)
+                
+                if compute_fnr:
+                    # Compute False Negative Rate for target region
+                    true_region_mask = region_types[val_idx] == target_region
+                    if true_region_mask.sum() > 0:
+                        # FNR = (true region but predicted as other) / (total true region)
+                        fnr = (pred[true_region_mask] != target_region).sum() / true_region_mask.sum()
+                        scores.append(fnr)
+                    else:
+                        # No samples of target region in validation fold, use 0.0 (perfect FNR)
+                        scores.append(0.0)
+                else:
+                    # Compute accuracy
+                    acc = accuracy_score(region_types[val_idx], pred)
+                    scores.append(acc)
             except Exception:
-                accuracies.append(0.0)
+                # On error, use worst possible score
+                if compute_fnr:
+                    scores.append(1.0)  # Worst FNR
+                else:
+                    scores.append(0.0)  # Worst accuracy
 
-        return float(np.mean(accuracies)) if accuracies else 0.0
+        mean_score = float(np.mean(scores)) if scores else (1.0 if compute_fnr else 0.0)
+        
+        # For FNR, return negative value so we can maximize (minimize FNR)
+        if compute_fnr:
+            return -mean_score
+        else:
+            return mean_score
 
     def _tune_classification_tree(
         self,
         X: np.ndarray,
         region_types: np.ndarray,
+        n_trials: Optional[int] = None,
+        n_splits: Optional[int] = None,
+        scoring: str = "accuracy",
+        verbose: bool = True,
     ) -> Tuple[Dict[str, Any], float]:
         """
         Tune hyperparameters for classification tree using Optuna.
 
-        Uses Optuna's TPE sampler to optimize classification accuracy via
+        Uses Optuna's TPE sampler to optimize the specified scoring function via
         K-fold cross-validation.
 
         Parameters
@@ -370,13 +579,24 @@ class TwoStepDivergenceTree:
             Feature matrix.
         region_types : np.ndarray
             Region type labels (1-4).
+        n_trials : int, optional
+            Number of Optuna trials. Default: 30.
+        n_splits : int, optional
+            Number of CV folds. Default: 5.
+        scoring : str, default="accuracy"
+            Scoring function. Options:
+            - "accuracy": Classification accuracy (maximize)
+            - "fnr_region_1", "fnr_region_2", "fnr_region_3", "fnr_region_4": 
+              False Negative Rate for the specified region (minimize)
+        verbose : bool, default=True
+            Whether to show Optuna progress output.
 
         Returns
         -------
         best_params : dict
             Best hyperparameters found (combines fixed and tuned parameters).
-        best_accuracy : float
-            Best cross-validated classification accuracy.
+        best_score : float
+            Best cross-validated score (accuracy or FNR, depending on scoring).
         """
         fixed = {}
         if "random_state" in self.classification_tree_params:
@@ -395,7 +615,20 @@ class TwoStepDivergenceTree:
             # No parameters to tune, return current params
             return dict(self.classification_tree_params), 0.0
 
+        # Set defaults
+        if n_trials is None:
+            n_trials = 30
+        if n_splits is None:
+            n_splits = 5
+
         random_state = self.classification_tree_params.get("random_state")
+
+        # Set Optuna logging verbosity
+        import optuna.logging
+        if verbose:
+            optuna.logging.set_verbosity(optuna.logging.INFO)
+        else:
+            optuna.logging.set_verbosity(optuna.logging.WARNING)
 
         def objective(trial):
             params = dict(fixed)
@@ -446,14 +679,21 @@ class TwoStepDivergenceTree:
             if random_state is not None:
                 params["random_state"] = random_state
 
-            accuracy = self._region_type_cv_accuracy(
-                X, region_types, params, n_splits=5, random_state=random_state
+            score = self._region_type_cv_score(
+                X, region_types, params, scoring=scoring, n_splits=n_splits, random_state=random_state
             )
-            return accuracy if np.isfinite(accuracy) else 0.0
+            # Return worst possible score on error (0.0 for accuracy, 1.0 for FNR which becomes -1.0)
+            if not np.isfinite(score):
+                if scoring == "accuracy":
+                    return 0.0
+                else:
+                    return -1.0
+            return score
 
         sampler = optuna.samplers.TPESampler(seed=random_state)
+        # Always maximize (FNR is returned as negative value)
         study = optuna.create_study(direction="maximize", sampler=sampler)
-        study.optimize(objective, n_trials=30, show_progress_bar=False)
+        study.optimize(objective, n_trials=n_trials, show_progress_bar=verbose)
 
         if len(study.trials) == 0 or study.best_trial is None:
             raise RuntimeError(
@@ -465,7 +705,12 @@ class TwoStepDivergenceTree:
         if random_state is not None:
             best_params["random_state"] = random_state
 
-        return best_params, study.best_value
+        best_score = study.best_value
+        # Convert back to positive FNR if using FNR scoring
+        if scoring.startswith("fnr_region_"):
+            best_score = -best_score
+
+        return best_params, best_score
 
     def predict_region_type(self, X: np.ndarray) -> np.ndarray:
         """

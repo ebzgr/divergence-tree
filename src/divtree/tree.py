@@ -19,8 +19,9 @@ Hyperparameters:
 
 The split selection objective combines heterogeneity and co-movement:
 - Heterogeneity: H = zF² + zC²
-- Co-movement: d = zF * zC, with φ(d) depending on co_movement mode
-- Objective: g = H + λ * φ(d)
+- Co-movement: d = zF * zC, with φ(d) = |d|
+- Region weighting: w_region = 1.0 if region is in regions_of_interest, else 0.0
+- Objective: g = H + λ * w_region * φ(d)
 
 where zF and zC are normalized deviations from baseline effects.
 """
@@ -94,9 +95,13 @@ class DivergenceTree:
         Number of quantiles to consider for continuous feature splits.
     random_state : int, optional
         Random seed for reproducibility (currently unused).
-    co_movement : {'both', 'converge', 'diverge'}, default='both'
-        Co-movement mode: 'both' (any alignment), 'converge' (both positive),
-        'diverge' (opposite signs).
+    regions_of_interest : List[int], optional
+        List of region numbers (1-4) to focus on in the objective function.
+        - Region 1: tauF > 0 and tauC > 0 (both positive)
+        - Region 2: tauF > 0 and tauC <= 0 (firm+, customer-)
+        - Region 3: tauF <= 0 and tauC > 0 (firm-, customer+)
+        - Region 4: tauF <= 0 and tauC <= 0 (both negative)
+        If None or empty, all regions [1, 2, 3, 4] are of interest (default behavior).
     eps_scale : float, default=1e-8
         Minimum scale value to avoid division by zero.
 
@@ -117,7 +122,7 @@ class DivergenceTree:
         min_improvement_ratio: float = 0.01,
         n_quantiles: int = 32,
         random_state: Optional[int] = None,
-        co_movement: str = "both",
+        regions_of_interest: Optional[List[int]] = None,
         eps_scale: float = 1e-8,
     ):
         self.lambda_ = float(lambda_)
@@ -127,12 +132,21 @@ class DivergenceTree:
         self.random_state = random_state
         self.eps_scale = float(eps_scale)
 
-        cm = (co_movement or "both").lower()
-        if cm not in {"both", "converge", "diverge"}:
-            raise ValueError(
-                "co_movement must be one of {'both','converge','diverge'}."
-            )
-        self.co_movement = cm
+        # Handle regions_of_interest parameter
+        if regions_of_interest is None or len(regions_of_interest) == 0:
+            # Default: all regions are of interest
+            self.regions_of_interest = [1, 2, 3, 4]
+        else:
+            # Validate regions_of_interest
+            valid_regions = {1, 2, 3, 4}
+            regions_set = set(regions_of_interest)
+            if not regions_set.issubset(valid_regions):
+                invalid = regions_set - valid_regions
+                raise ValueError(
+                    f"regions_of_interest must contain only values from {{1, 2, 3, 4}}. "
+                    f"Invalid values: {sorted(invalid)}"
+                )
+            self.regions_of_interest = sorted(list(regions_set))
 
         self.root_: Optional[TreeNode] = None
         self._fit_data: Dict[str, Any] = {}
@@ -784,6 +798,35 @@ class DivergenceTree:
     # Objective Function and Utilities
     # ===============================================================
 
+    def _determine_region_type(self, tauF: float, tauC: float) -> int:
+        """
+        Determine region type (1-4) based on treatment effect signs.
+        
+        Parameters
+        ----------
+        tauF : float
+            Firm treatment effect.
+        tauC : float
+            Consumer treatment effect.
+        
+        Returns
+        -------
+        int
+            Region type: 1 (both positive), 2 (firm+ customer-), 
+            3 (firm- customer+), 4 (both negative).
+        """
+        tauF_clean = 0.0 if not np.isfinite(tauF) else tauF
+        tauC_clean = 0.0 if not np.isfinite(tauC) else tauC
+        
+        if tauF_clean > 0 and tauC_clean > 0:
+            return 1  # Region 1: both positive
+        elif tauF_clean > 0 and tauC_clean <= 0:
+            return 2  # Region 2: firm positive, customer negative
+        elif tauF_clean <= 0 and tauC_clean > 0:
+            return 3  # Region 3: firm negative, customer positive
+        else:
+            return 4  # Region 4: both negative
+
     def _g(
         self,
         tauF: float,
@@ -797,12 +840,17 @@ class DivergenceTree:
         Compute objective function and return components for debugging.
 
         The objective function combines heterogeneity and co-movement:
-        g = zF² + zC² + λ * φ(zF * zC)
+        g = zF² + zC² + λ * w_region * |zF * zC|
 
         where:
         - zF = (tauF - base_tauF) / sF
         - zC = (tauC - base_tauC) / sC
-        - φ depends on co_movement mode
+        - w_region = 1.0 if region is in regions_of_interest, else 0.0
+        - φ(d) = |d| (absolute value of interaction term)
+
+        The interaction term is weighted by whether the region (tauF, tauC) belongs to
+        is in the regions_of_interest list. This focuses the objective on regions
+        of interest while still maintaining heterogeneity terms for all regions.
 
         Returns:
             Tuple of (objective_value, components_dict)
@@ -812,6 +860,7 @@ class DivergenceTree:
                 "zF2": np.nan,
                 "zC2": np.nan,
                 "phi": np.nan,
+                "w_region": np.nan,
                 "g": -np.inf,
                 "tauF": tauF,
                 "tauC": tauC,
@@ -825,17 +874,25 @@ class DivergenceTree:
         zF2 = float(zF**2)
         zC2 = float(zC**2)
         d = zF * zC
-        if self.co_movement == "both":
-            phi = float(abs(d))
-        elif self.co_movement == "converge":
-            phi = float(max(0.0, d))
-        else:
-            phi = float(max(0.0, -d))
-        g = float(zF2 + zC2 + self.lambda_ * phi)
+        
+        # Determine which region this (tauF, tauC) pair belongs to
+        region_type = self._determine_region_type(tauF, tauC)
+        
+        # Weight the interaction term based on whether region is of interest
+        w_region = 1.0 if region_type in self.regions_of_interest else 0.0
+        
+        # Interaction term: absolute value of d
+        phi = float(abs(d))
+        
+        # Weighted objective: heterogeneity terms always included, interaction weighted by region interest
+        g = float(zF2 + zC2 + self.lambda_ * w_region * phi)
+        
         return g, {
             "zF2": zF2,
             "zC2": zC2,
             "phi": phi,
+            "w_region": w_region,
+            "region_type": region_type,
             "g": g,
             "tauF": tauF,
             "tauC": tauC,

@@ -226,7 +226,7 @@ def generate_binary_comparison_data(
 
     # Step 2: Generate categorical data
     # First, force positive_ratio of observations to be in activating combinations
-    # Then randomly generate the rest
+    # Then force the rest to be in non-activating combinations (negative regions)
     categorical_data = np.zeros((n_users, k), dtype=int)
 
     # Calculate how many observations should be forced into activating combinations
@@ -246,10 +246,32 @@ def generate_binary_comparison_data(
                 combo = all_activating_combinations[combo_idx]
                 categorical_data[i, :] = np.array(combo)
 
-    # For the remaining observations, randomly generate their categorical data
-    for i in range(forced_obs, n_users):
-        for j in range(k):
-            categorical_data[i, j] = rng.integers(0, n_categories[j])
+    # For the remaining observations, force them into non-activating combinations
+    if forced_obs < n_users:
+        # Reuse all_combinations already generated in Step 1
+        # Identify non-activating combinations (all combinations NOT in activating set)
+        non_activating_combinations = [
+            combo for combo in all_combinations 
+            if combo not in all_activating_combinations
+        ]
+        
+        if len(non_activating_combinations) == 0:
+            raise ValueError(
+                "No non-activating combinations available. "
+                "All possible combinations are activating. "
+                "This can happen if m_firm + m_user >= total_combinations."
+            )
+        
+        # Randomly assign remaining observations to non-activating combinations
+        n_remaining = n_users - forced_obs
+        selected_combo_indices = rng.choice(
+            len(non_activating_combinations), size=n_remaining, replace=True
+        )
+        for i, combo_idx in enumerate(selected_combo_indices):
+            obs_idx = forced_obs + i
+            if obs_idx < n_users:
+                combo = non_activating_combinations[combo_idx]
+                categorical_data[obs_idx, :] = np.array(combo)
 
     # Step 3: Create binary feature matrix (one-hot encoded)
     n_features = sum(n_categories)
@@ -274,8 +296,9 @@ def generate_binary_comparison_data(
     # Step 5: Generate treatment effects τ(X)
     # For each observation, check if it matches any activation combination
     # Activated combinations get +intensity, non-activated get -intensity
-    tauF_clean = np.full(n_users, -intensity)  # Start with -intensity for all
-    tauC_clean = np.full(n_users, -intensity)  # Start with -intensity for all
+    # Use float dtype to allow multiplication by float adjustment_factor later
+    tauF_clean = np.full(n_users, -float(intensity), dtype=float)  # Start with -intensity for all
+    tauC_clean = np.full(n_users, -float(intensity), dtype=float)  # Start with -intensity for all
 
     # Convert categorical_data to list of tuples for easy comparison
     obs_combinations = [tuple(categorical_data[i, :]) for i in range(n_users)]
@@ -286,7 +309,7 @@ def generate_binary_comparison_data(
         matches = [obs_combo == combo for obs_combo in obs_combinations]
         matches = np.array(matches)
         if matches.any():
-            tauF_clean[matches] = intensity
+            tauF_clean[matches] = float(intensity)
             firm_activated_mask[matches] = True
 
     # User treatment effects: set activated combinations to +intensity
@@ -295,7 +318,7 @@ def generate_binary_comparison_data(
         matches = [obs_combo == combo for obs_combo in obs_combinations]
         matches = np.array(matches)
         if matches.any():
-            tauC_clean[matches] = intensity
+            tauC_clean[matches] = float(intensity)
             user_activated_mask[matches] = True
 
     # Step 5a: Compute region type based on CLEAN treatment effects (before noise)

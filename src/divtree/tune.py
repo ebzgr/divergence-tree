@@ -17,6 +17,7 @@ import numpy as np
 from sklearn.model_selection import KFold
 from typing import Dict, Any, Optional, Tuple
 import optuna
+import optuna.logging
 
 from .tree import DivergenceTree
 
@@ -121,6 +122,7 @@ def tune_with_optuna(
     n_trials: int = 50,
     n_splits: int = 5,
     random_state: Optional[int] = 123,
+    verbose: bool = True,
 ) -> Tuple[Dict[str, Any], float]:
     """
     Hyperparameter tuning using Optuna with K-fold CV pseudo-outcome loss.
@@ -151,6 +153,9 @@ def tune_with_optuna(
         Number of folds for cross-validation.
     random_state : int, optional
         Random seed for reproducibility (KFold and Optuna sampler).
+    verbose : bool, default=True
+        Whether to show Optuna progress bar and logging output.
+        Set to False to suppress output during parallel execution.
 
     Returns
     -------
@@ -201,9 +206,15 @@ def tune_with_optuna(
         )
         return loss if np.isfinite(loss) else 1e6
 
+    # Set Optuna logging verbosity
+    if verbose:
+        optuna.logging.set_verbosity(optuna.logging.INFO)
+    else:
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+
     sampler = optuna.samplers.TPESampler(seed=random_state)
     study = optuna.create_study(direction="minimize", sampler=sampler)
-    study.optimize(objective, n_trials=n_trials, show_progress_bar=True)
+    study.optimize(objective, n_trials=n_trials, show_progress_bar=verbose)
 
     # Check if any trials completed successfully
     if len(study.trials) == 0 or study.best_trial is None:

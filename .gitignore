@@ -16,6 +16,12 @@ data/
 tests/Trial/data/
 tests/*/data/
 
+# Simulation output directories
+simulations/*/comprehensive_simulation/output/
+simulations/*/comprehensive_simulation/*/output/
+simulations/*/data/
+simulations/*/*/data/
+
 # Results directories (optional - uncomment if you don't want to track results)
 # tests/Trial/results/
 # results/

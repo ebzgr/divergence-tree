@@ -160,7 +160,21 @@ leaf_effects = tree.leaf_effects()
 - `max_partitions`: Maximum leaves before pruning (default: 8)
 - `min_improvement_ratio`: Minimum improvement to keep split (default: 0.01)
 - `lambda_`: Co-movement weight in split objective (default: 1.0)
-- `co_movement`: 'both', 'converge', or 'diverge' (default: 'both')
+- `regions_of_interest`: List of region numbers (1-4) to focus on in the objective function (default: None, meaning all regions [1, 2, 3, 4] are of interest)
+  - Region 1: τF > 0 and τC > 0 (both positive - win-win)
+  - Region 2: τF > 0 and τC ≤ 0 (firm+, customer-)
+  - Region 3: τF ≤ 0 and τC > 0 (firm-, customer+)
+  - Region 4: τF ≤ 0 and τC ≤ 0 (both negative - lose-lose)
+
+**Objective Function**:
+
+The split selection objective combines heterogeneity and co-movement:
+- **Heterogeneity**: H = zF² + zC² (always included for all regions)
+- **Co-movement**: d = zF * zC, with φ(d) = |d|
+- **Region weighting**: w_region = 1.0 if region is in `regions_of_interest`, else 0.0
+- **Objective**: g = H + λ * w_region * φ(d)
+
+where zF and zC are normalized deviations from baseline effects. The co-movement term is only weighted when the region belongs to `regions_of_interest`, allowing you to focus the optimization on specific regions while maintaining heterogeneity detection for all regions.
 
 ### Using TwoStepDivergenceTree
 
