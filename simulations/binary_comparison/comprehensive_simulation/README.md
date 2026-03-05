@@ -1,268 +1,276 @@
-# Comprehensive Simulation Framework for Divergence Tree Comparison
+# Lambda Comparison Simulation
 
 ## Overview
 
-This simulation framework systematically compares different **DivergenceTree** and **TwoStepDivergenceTree** configurations across different data generation settings. The framework supports multiple analysis modes:
+This simulation compares **DivergenceTree** configurations with different lambda values across diverse data generation settings. The simulation systematically evaluates how the regularization parameter λ affects performance when focusing on specific regions of interest (Region 2: firm positive, consumer negative).
 
-1. **One-at-a-time Analysis** (`run_simulation.py`): Vary one aspect at a time while keeping others fixed at baseline values
-2. **Unified Comparison** (`unified_comparison.py`): **[RECOMMENDED]** Compare all 8 methods on the same datasets (combines lambda and method comparisons)
-3. **Lambda Comparison** (`lambda_comparison.py`): Compare DivergenceTree with different lambda values (0, 1, 2, 3, 4) using random space sampling
-4. **Method Comparison** (`method_comparison.py`): Compare DivergenceTree and TwoStepDivergenceTree variants using random space sampling
-5. **Random Space Comparison** (`random_space_comparison.py`): [DEPRECATED] Legacy script for lambda comparison (missing lambda=3). Use `lambda_comparison.py` instead.
+## Data Generation Process
 
-## Purpose
+### Categorical Variable Generation
 
-The simulation is designed to:
+The data generation process uses `binary_data_generator.py` to create synthetic data with categorical features. The process works as follows:
 
-- Compare the performance of different DivergenceTree configurations (varying lambda and regions_of_interest) across various data generation settings
-- Understand how different aspects of data generation (complexity, noise, sparsity, rareness, covariance, data size) affect algorithm performance
-- Provide statistical confidence through multiple replications (Monte Carlo approach)
-- Generate comprehensive evaluation metrics beyond simple accuracy
-- Enable robust statistical comparison between different method configurations
+1. **Categorical Structure**: 
+   - We have `k` categorical variables, where each variable `i` has `n_categories[i]` possible categories
+   - Each observation belongs to exactly one combination of categories across all `k` variables
+   - The total number of possible combinations is the product: `n_categories[0] × n_categories[1] × ... × n_categories[k-1]`
 
-## Data Generation Aspects
+2. **One-Hot Encoding**:
+   - Each categorical variable is one-hot encoded into binary features
+   - The total number of binary features = `sum(n_categories)`
+   - Each observation has exactly `k` features set to 1 (one per categorical variable), and all others set to 0
+   - Example: If `k=3` with `n_categories=[3, 4, 5]`, we get:
+     - Total combinations: 3×4×5 = 60 possible category combinations
+     - Total binary features: 3+4+5 = 12 features
+     - Each observation has exactly 3 features set to 1 (one from each variable)
 
-The simulation varies 6 key aspects of data generation:
+3. **Feature Count**:
+   - **Important**: The total number of features is fixed at **60** across all simulations
+   - This is achieved by setting `n_categories = [60//k]*k` where `k` is the sparsity parameter
+   - For example:
+     - `k=1`: `n_categories=[60]` → 60 features, 60 combinations
+     - `k=2`: `n_categories=[30, 30]` → 60 features, 900 combinations
+     - `k=6`: `n_categories=[10, 10, 10, 10, 10, 10]` → 60 features, 1,000,000 combinations
 
-### 1. Complexity
-- **Parameter**: `m_firm = m_user` (number of activating combinations)
-- **Range**: Uniform between 1 and 30
-- **Effect**: As complexity increases, more combinations activate treatment effects
+### Treatment Effect Structure
 
-### 2. Noise
-- **Parameter**: `effect_noise_std` (noise in treatment effects)
-- **Range**: Log-uniform between 0.001 and 10.0
-- **Effect**: Higher noise makes treatment effects harder to detect
+The data generating process follows the standard structure: **Y = μ(X) + τ(X) × T + ε**
 
-### 3. Data Size
-- **Parameter**: `n_users_train` (number of training samples)
-- **Range**: Log-uniform between 1000 and 200000
-- **Effect**: Larger datasets provide more information for learning
+1. **Baseline Outcomes** (`μ(X)`):
+   - Random coefficients are assigned to all binary features
+   - Baseline outcomes are computed as linear combinations: `μ(X) = X @ baseline_coef`
 
-### 4. Sparsity
-- **Parameter**: `k` (number of categorical variables)
+2. **Treatment Effects** (`τ(X)`):
+   - Specific category combinations are designated as "activating" for treatment effects
+   - Observations in activating combinations receive treatment effect `+intensity`
+   - Observations in non-activating combinations receive treatment effect `-intensity`
+   - Separate sets of activating combinations exist for firm effects (`m_firm` combinations) and consumer effects (`m_user` combinations)
+
+3. **Region Types**:
+   - Region types are determined by the signs of treatment effects (before noise is added):
+     - **Region 1**: `τF > 0` and `τC > 0` (both positive — win-win)
+     - **Region 2**: `τF > 0` and `τC ≤ 0` (firm positive, consumer negative — trade-off favoring firm)
+     - **Region 3**: `τF ≤ 0` and `τC > 0` (firm negative, consumer positive — trade-off favoring consumer)
+     - **Region 4**: `τF ≤ 0` and `τC ≤ 0` (both negative — lose-lose)
+
+4. **Outcome Generation**:
+   - Treatment assignment `T` is random with probability 0.5
+   - Outcomes are generated as: `Y = μ(X) + τ(X) × T + ε`
+   - Noise `ε` is added to the outcomes (separate noise for firm and consumer outcomes)
+
+### The 5 Factors
+
+The simulation varies five key factors that control different aspects of data complexity and difficulty:
+
+**Note**: The total number of features is fixed at 60 across all simulations. This is achieved by setting `n_categories = [60//k]*k` where `k` is the sparsity parameter.
+
+#### 1. Complexity (`m_firm = m_user`)
+
+- **Range**: Uniform [1, 30]
+- **Maps to**: Number of activating combinations for both firm and consumer treatment effects
+- **Effect**: Higher complexity means more complex treatment effect structure, requiring trees with more nodes to capture the heterogeneity. As the number of activating combinations increases, the algorithm needs to identify more distinct patterns in the data.
+
+#### 2. Noise (`effect_noise_std`)
+
+- **Range**: Log-uniform [0.001, 10.0]
+- **Maps to**: Standard deviation of noise added to treatment effects (before outcomes are generated)
+- **Effect**: Higher noise makes it harder to find treatment effects, as the signal-to-noise ratio decreases. The noise is added to the treatment effects themselves, which can flip signs and obscure the true underlying patterns.
+
+#### 3. Sparsity (`k`)
+
 - **Values**: [1, 2, 3, 4, 5, 6]
-- **Effect**: As k increases, sparsity increases. `n_categories = [60//k]*k` to keep total features = 60
+- **Maps to**: Number of categorical variables
+- **Effect**: `n_categories = [60//k]*k` to keep total features = 60. Higher sparsity (higher k) means fewer categories per variable, which requires deeper trees to capture the treatment effects since the splitting structure needs to go through more levels. For example, with `k=6`, the tree must split on 6 different variables to fully capture a combination, whereas with `k=1`, a single split can identify a category.
 
-### 5. Rareness
-- **Parameter**: `positive_ratio` (proportion of observations in activating combinations)
-- **Range**: Uniform between 0.01 and 0.99
-- **Effect**: Lower values mean activating combinations are rarer
+#### 4. Rareness (`positive_ratio`)
 
-### 6. Covariance
-- **Parameter**: `similarity` (proportion of combinations shared between firm and user effects)
-- **Range**: Uniform between 0.0 and 1.0
-- **Effect**: Higher similarity means more overlap between firm and user activating combinations
+- **Range**: Uniform [0.01, 0.99]
+- **Maps to**: Proportion of observations forced into activating combinations
+- **Effect**: Lower rareness makes it harder to find segments of interest. For example, if rareness = 0.01, only 1% of observations have positive treatment effects, making it very difficult to identify specific regions. The algorithm has fewer positive examples to learn from, and the signal is overwhelmed by the majority of negative examples.
 
-## Default Baseline Values
+#### 5. Covariance (`similarity`)
 
-When running one-at-a-time analysis, other aspects are kept at these baseline values:
+- **Range**: Uniform [0.0, 1.0]
+- **Maps to**: Proportion of combinations shared between firm and user activating combinations
+- **Effect**: Higher covariance means firm and consumer side signals are aligned in the same variables and same directions. This makes it easier for the algorithm to find specific regions because both outcomes are responding to the same underlying patterns. When similarity is high, splits that help identify firm effects also help identify consumer effects, creating a synergistic signal.
 
-- `n_users_train = 20000`
-- `n_users_test = 10000`
-- `k = 6`
-- `n_categories = [10]*6`
-- `m_firm = 4`
-- `m_user = 4`
-- `similarity = 0.5`
-- `intensity = 1`
-- `effect_noise_std = 1`
-- `firm_outcome_noise_std = 1`
-- `user_outcome_noise_std = 1`
-- `positive_ratio = 0.5`
+### Data Generation Flow
 
-## Evaluation Metrics
+The complete data generation process (`generate_binary_comparison_data()`) follows these steps:
 
-The simulation computes comprehensive evaluation metrics for each algorithm:
+1. **Generate all possible category combinations**: Create the full set of all possible combinations across all categorical variables
+2. **Select activating combinations**: 
+   - Randomly select `m_firm` combinations for firm effects
+   - Randomly select `m_user` combinations for consumer effects
+   - Ensure `similarity × m_user` combinations are shared between firm and consumer
+3. **Assign observations to combinations**:
+   - Force `positive_ratio × n_users` observations into activating combinations (randomly distributed)
+   - Force remaining observations into non-activating combinations
+4. **Generate baseline outcomes**: Create random coefficients and compute `μ(X) = X @ baseline_coef` for both firm and consumer
+5. **Assign treatment effects**: 
+   - Set `τ = +intensity` for activated combinations
+   - Set `τ = -intensity` for non-activated combinations
+6. **Add noise to treatment effects**: Add Gaussian noise with standard deviation `effect_noise_std` to both firm and consumer effects
+7. **Compute region types**: Determine region type (1-4) based on signs of `τF` and `τC` after noise
+8. **Generate outcomes**: 
+   - Randomly assign treatment `T ~ Bernoulli(0.5)`
+   - Generate `YF = μF(X) + τF × T + εF`
+   - Generate `YC = μC(X) + τC × T + εC`
 
-### Classification Metrics
-- **Overall Accuracy**: Proportion of correct predictions
+## Lambda Comparison Simulation
+
+### Overview
+
+The lambda comparison simulation evaluates how different values of the regularization parameter λ affect DivergenceTree performance. All methods are evaluated on the same datasets to ensure fair comparison. The simulation uses random space sampling across the 5 factors described above.
+
+### Methods Compared
+
+The simulation compares **8 DivergenceTree configurations**:
+
+1. **λ=0** (baseline, no region weighting)
+   - `regions_of_interest=None`
+   - No co-movement term in objective function
+
+2. **λ=1, regions_of_interest=[2]**
+   - Focuses on Region 2 (firm positive, consumer negative)
+   - Co-movement term weighted by λ=1
+
+3. **λ=2, regions_of_interest=[2]**
+   - Same focus, higher regularization weight
+
+4. **λ=3, regions_of_interest=[2]**
+   - Same focus, even higher regularization weight
+
+5. **λ=4, regions_of_interest=[2]**
+   - Same focus, higher regularization weight
+
+6. **λ=6, regions_of_interest=[2]**
+   - Same focus, higher regularization weight
+
+7. **λ=8, regions_of_interest=[2]**
+   - Same focus, higher regularization weight
+
+8. **λ=10, regions_of_interest=[2]**
+   - Same focus, highest regularization weight
+
+All methods with λ>0 focus on Region 2, which represents trade-off scenarios where firm benefits come at consumer expense.
+
+### Simulation Process
+
+The simulation runs **10,000 simulations** by default (configurable in the script). Each simulation follows these steps:
+
+1. **Random Sampling**: Randomly sample one value from each factor's range:
+   - Complexity: Uniform [1, 30]
+   - Noise: Log-uniform [0.001, 10.0]
+   - Data size: Log-uniform [1000, 200000] (training set size; test set is half)
+   - Sparsity: Random choice from [1, 2, 3, 4, 5, 6]
+   - Rareness: Uniform [0.01, 0.99]
+   - Covariance: Uniform [0.0, 1.0]
+
+2. **Data Generation**: Generate train and test datasets using the sampled parameters
+
+3. **Data Persistence**: 
+   - Check if data already exists for this simulation ID
+   - If exists, load the saved data (ensures reproducibility and efficiency)
+   - If not, generate new data and save it for future use
+
+4. **Method Execution**: Run all 8 lambda methods on the same dataset:
+   - Each method fits a DivergenceTree with the specified λ and `regions_of_interest`
+   - All methods use the same hyperparameter tuning process (Optuna with cross-validation)
+
+5. **Metric Computation**: Compute evaluation metrics for each method:
+   - Classification metrics (accuracy, F1, precision, recall, etc.)
+   - Per-region metrics
+   - Complexity metrics (number of leaves, runtime)
+
+6. **Incremental Saving**: Save results after each batch of 1000 simulations to prevent data loss
+
+### Evaluation Metrics
+
+The simulation computes comprehensive evaluation metrics for each method:
+
+#### Classification Metrics
+- **Overall Accuracy**: Proportion of correct region type predictions
 - **Per-Region Accuracy**: Accuracy for each region type (1, 2, 3, 4)
-- **False Negative Rate (FNR) for Region 2**: Proportion of true region 2 observations incorrectly predicted as other regions
+- **False Negative Rate (FNR) for Region 2**: Proportion of true Region 2 observations incorrectly predicted as other regions
+- **Precision and Recall for Region 2**: Precision and recall specifically for Region 2
 - **F1 Score per Region**: F1 score for each region type (1, 2, 3, 4)
 - **Balanced Accuracy**: Accuracy adjusted for class imbalance
 - **Matthews Correlation Coefficient (MCC)**: Correlation between true and predicted classes
 
-### Information-Theoretic Metrics
-- **RIG (Relative Information Gain)**: 
-  - RIG = (H_baseline - H_model) / H_baseline
-  - Where H is entropy: H = -Σ p_i * log(p_i)
-  - Baseline: uniform distribution (1/4 for each class)
-  - Model: predicted class distribution
-
-### Complexity Metrics
+#### Complexity Metrics
 - **Number of Leaves**: Tree complexity (number of terminal nodes)
 - **Runtime**: Computation time in seconds
 
-## Methods
-
-### 1. One-at-a-time Analysis (`run_simulation.py`)
-
-Varies one aspect at a time while keeping others fixed at baseline values.
-
-**Usage:**
-```bash
-python run_simulation.py --mode one_at_a_time --n_replications 50
-```
-
-**Output:**
-- `output/data/one_at_a_time/`: Individual simulation data
-- `output/aggregated/one_at_a_time/`: Aggregated results per aspect
-  - `{aspect}_results.pkl`: DataFrame with all replications for each aspect value
-
-### 2. Unified Comparison (`unified_comparison.py`) **[RECOMMENDED]**
-
-Compares all 8 methods on the same generated datasets, allowing for comprehensive comparison across all methods. This is the recommended approach as it ensures fair comparison by using identical datasets for all methods.
-
-**Methods (8 total):**
-- DivTree with λ=0
-- DivTree with λ=1, regions_of_interest=[2]
-- DivTree with λ=2, regions_of_interest=[2]
-- DivTree with λ=3, regions_of_interest=[2]
-- DivTree with λ=4, regions_of_interest=[2]
-- TwoStepDivergenceTree (unconstrained, no max leaves)
-- TwoStepDivergenceTree (constrained, max leaves = DivTree λ=0 leaves)
-- TwoStepDivergenceTree (constrained + FNR scoring, max leaves = DivTree λ=0 leaves)
-
-**Usage:**
-```bash
-python unified_comparison.py
-```
-
-**Configuration:**
-- Number of simulations: 10000 (default, configurable in script)
-- Batch size: 1000 (saves incrementally)
-- Parallel jobs: All CPUs minus 1 (leaves 1 core free)
-
-**Output:**
-- `output/data/unified_comparison/`: Individual simulation data
-- `output/aggregated/unified_comparison/`: Aggregated results
-  - `all_simulations_results.pkl`: DataFrame with all simulation results
-
-### 3. Lambda Comparison (`lambda_comparison.py`)
-
-Compares DivergenceTree with different lambda values using random space sampling. Compares 5 configurations:
-- λ=0 (baseline, no region weighting)
-- λ=1, regions_of_interest=[2]
-- λ=2, regions_of_interest=[2]
-- λ=3, regions_of_interest=[2]
-- λ=4, regions_of_interest=[2]
-
-**Usage:**
-```bash
-python lambda_comparison.py
-```
-
-**Configuration:**
-- Number of simulations: 10000 (default, configurable in script)
-- Batch size: 1000 (saves incrementally)
-- Parallel jobs: All CPUs minus 1 (leaves 1 core free)
-
-**Output:**
-- `output/data/lambda_comparison/`: Individual simulation data
-- `output/aggregated/lambda_comparison/`: Aggregated results
-  - `all_simulations_results.pkl`: DataFrame with all simulation results
-
-### 4. Method Comparison (`method_comparison.py`)
-
-Compares DivergenceTree and TwoStepDivergenceTree variants using random space sampling. Compares 5 methods:
-- DivTree with λ=0 (baseline)
-- DivTree with λ=2, regions_of_interest=[2]
-- TwoStep (unconstrained, no max leaves)
-- TwoStep (constrained, max leaves = DivTree λ=0 leaves)
-- TwoStep (constrained + FNR scoring, max leaves = DivTree λ=0 leaves, optimized for FNR of region 2)
-
-**Usage:**
-```bash
-python method_comparison.py
-```
-
-**Configuration:**
-- Number of simulations: 10000 (default, configurable in script)
-- Batch size: 1000 (saves incrementally)
-- Parallel jobs: All CPUs minus 1 (leaves 1 core free)
-
-**Output:**
-- `output/data/method_comparison/`: Individual simulation data
-- `output/aggregated/method_comparison/`: Aggregated results
-  - `all_simulations_results.pkl`: DataFrame with all simulation results
-
-### 5. Analysis Script (`analyze_results.py`)
-
-Unified analysis script that works with both lambda_comparison and method_comparison results. Generates:
-- Aspect comparison plots (performance across all aspects for key metrics: accuracy, FNR region 2, F1 region 2)
-- Statistical test matrices (pairwise significance tests for all method pairs)
-- LaTeX tables with statistical test results
-- Decision trees for method selection (one tree per metric)
-
-**Usage:**
-```bash
-# Analyze lambda comparison results
-python analyze_results.py
-# Or specify paths and simulation type:
-python -c "from analyze_results import analyze_results; analyze_results('output/aggregated/lambda_comparison/all_simulations_results.pkl', 'output/aggregated/lambda_comparison/analysis', simulation_type='lambda_comparison')"
-
-# Analyze method comparison results
-python -c "from analyze_results import analyze_results; analyze_results('output/aggregated/method_comparison/all_simulations_results.pkl', 'output/aggregated/method_comparison/analysis', simulation_type='method_comparison')"
-```
-
-**Output:**
-- `output/aggregated/{simulation_type}/analysis/plots/`: Comparison plots and statistical test matrices
-- `output/aggregated/{simulation_type}/analysis/tables/`: Statistical test results (CSV and LaTeX)
-- `output/aggregated/{simulation_type}/analysis/trees/`: Decision tree visualizations
-
-### 6. Legacy Scripts (Deprecated)
-
-- **`random_space_comparison.py`**: [DEPRECATED] Legacy lambda comparison script (missing lambda=3). Use `lambda_comparison.py` instead.
-- **`analyze_random_space_results.py`**: [DEPRECATED] Legacy analysis script. Use `analyze_results.py` instead.
-
-## Output Structure
+### Output Structure
 
 ```
 comprehensive_simulation/
-├── config.py                          # Configuration
-├── metrics.py                         # Evaluation metrics
-├── utils.py                           # Helper functions
-├── simulation_base.py                 # Base framework (MethodRunner classes, shared utilities)
-├── run_simulation.py                  # One-at-a-time analysis
-├── unified_comparison.py              # [RECOMMENDED] Unified comparison (all 8 methods)
-├── lambda_comparison.py               # Lambda comparison simulation
-├── method_comparison.py               # Method comparison simulation
-├── analyze_results.py                 # Unified analysis script
-├── random_space_comparison.py         # [DEPRECATED] Legacy lambda comparison
-├── analyze_random_space_results.py    # [DEPRECATED] Legacy analysis script
+├── lambda_comparison.py              # Main simulation script (DivTree + TwoStep)
+├── analyze_lambda_comparison.py      # Analysis script
 ├── output/
 │   ├── data/
-│   │   ├── one_at_a_time/             # One-at-a-time simulation data
-│   │   ├── unified_comparison/        # [RECOMMENDED] Unified comparison simulation data
-│   │   ├── lambda_comparison/         # Lambda comparison simulation data
-│   │   ├── method_comparison/         # Method comparison simulation data
-│   │   └── region2tuning_test/        # [LEGACY] Random space simulation data
+│   │   └── lambda_twostep_comparison/  # Individual simulation data
+│   │       └── simulation_XXXXXX/     # Per-simulation directories
+│   │           ├── train_data.pkl     # Training data (DataFrame)
+│   │           ├── val_data.pkl       # Validation data (DataFrame)
+│   │           ├── test_data.pkl      # Test data (DataFrame)
+│   │           └── functional_form.pickle  # Functional form info
 │   └── aggregated/
-│       ├── one_at_a_time/             # One-at-a-time aggregated results
-│       ├── unified_comparison/        # [RECOMMENDED] Unified comparison aggregated results
-│       │   └── analysis/              # Analysis outputs
-│       │       ├── plots/             # Comparison plots and matrices
-│       │       ├── tables/            # Statistical test results
-│       │       └── trees/             # Decision tree visualizations
-│       ├── lambda_comparison/         # Lambda comparison aggregated results
-│       │   └── analysis/              # Analysis outputs
-│       │       ├── plots/             # Comparison plots and matrices
-│       │       ├── tables/            # Statistical test results
-│       │       └── trees/             # Decision tree visualizations
-│       ├── method_comparison/         # Method comparison aggregated results
-│       │   └── analysis/              # Analysis outputs
-│       │       ├── plots/             # Comparison plots and matrices
-│       │       ├── tables/            # Statistical test results
-│       │       └── trees/             # Decision tree visualizations
-│       └── region2tuning_test/        # [LEGACY] Random space aggregated results
+│       └── lambda_twostep_comparison/  # Aggregated results
+│           ├── all_simulations_results.pkl  # Main results DataFrame
+│           └── analysis/             # Analysis outputs (if run)
+│               ├── plots/             # Comparison plots
+│               └── tables/            # Summary tables
 ```
 
-## DataFrame Structure
+### Usage
 
-Each aggregated DataFrame contains:
+#### Running the Simulation
 
-**Aspect Columns:**
+```bash
+cd simulations/binary_comparison/comprehensive_simulation
+python lambda_comparison.py
+```
+
+**Configuration** (in `lambda_comparison.py`):
+- Number of simulations: 10,000 (default, configurable)
+- Batch size: 1,000 (saves incrementally)
+- Parallel jobs: All CPUs minus 1 (leaves 1 core free for system tasks)
+
+#### Analyzing Results
+
+After running the simulation, use the analysis script to generate plots and statistical tests:
+
+```bash
+python analyze_lambda_comparison.py
+```
+
+Or programmatically:
+
+```python
+from analyze_lambda_comparison import create_lambda_comparison_plots
+
+df = pd.read_pickle("output/aggregated/lambda_twostep_comparison/all_simulations_results.pkl")
+create_lambda_comparison_plots(
+    df, 
+    output_dir="output/aggregated/lambda_twostep_comparison/analysis"
+)
+```
+
+The analysis script:
+- Creates plots showing each metric vs. lambda (x-axis: lambda, y-axis: metric value)
+- Performs paired t-tests comparing:
+  - Lambda 0 vs. all other lambdas
+  - Lambda 2 vs. all other lambdas
+- Displays significance markers (`*`, `**`, `***`) on plots
+- Adjusts y-axis limits for 0-1 metrics to show only relevant ranges
+
+### DataFrame Structure
+
+The aggregated results DataFrame (`all_simulations_results.pkl`) contains:
+
+**Aspect Columns**:
 - `simulation_id`: Unique identifier
 - `complexity`: m_firm = m_user value
 - `noise`: effect_noise_std value
@@ -271,70 +279,16 @@ Each aggregated DataFrame contains:
 - `rareness`: positive_ratio value
 - `covariance`: similarity value
 
-**Method Metrics (for each method):**
-- `{method}_accuracy`
-- `{method}_acc_region_1`, `{method}_acc_region_2`, `{method}_acc_region_3`, `{method}_acc_region_4`
-- `{method}_fnr_region_2`
-- `{method}_f1_region_1`, `{method}_f1_region_2`, `{method}_f1_region_3`, `{method}_f1_region_4`
-- `{method}_balanced_accuracy`
-- `{method}_mcc`
-- `{method}_rig`
-- `{method}_n_leaves`
-- `{method}_runtime`
-
-## Usage Workflow
-
-### Step 1: Run Simulations
-
-```bash
-# One-at-a-time analysis
-python run_simulation.py --mode one_at_a_time --n_replications 50
-
-# Unified comparison (RECOMMENDED: compares all 8 methods on same datasets)
-python unified_comparison.py
-
-# Lambda comparison (compares lambda values 0, 1, 2, 3, 4)
-python lambda_comparison.py
-
-# Method comparison (compares DivTree and TwoStep variants)
-python method_comparison.py
-```
-
-### Step 2: Analyze Results
-
-```bash
-# Analyze lambda comparison results (auto-detects simulation type)
-python -c "from analyze_results import analyze_results; analyze_results('output/aggregated/lambda_comparison/all_simulations_results.pkl', 'output/aggregated/lambda_comparison/analysis')"
-
-# Analyze method comparison results
-python -c "from analyze_results import analyze_results; analyze_results('output/aggregated/method_comparison/all_simulations_results.pkl', 'output/aggregated/method_comparison/analysis')"
-
-# Analyze unified comparison results (RECOMMENDED)
-python -c "from analyze_results import analyze_results; analyze_results('output/aggregated/unified_comparison/all_simulations_results.pkl', 'output/aggregated/unified_comparison/analysis')"
-```
-
-### Step 3: Load and Analyze DataFrames
-
-```python
-import pandas as pd
-
-# Load aggregated results
-df = pd.read_pickle("output/aggregated/region2tuning_test/all_simulations_results.pkl")
-
-# Analyze specific metric
-print(df[["complexity", "divtree_lambda0_accuracy", "divtree_lambda2_region2_accuracy"]].groupby("complexity").mean())
-
-# Compare methods
-difference = df["divtree_lambda2_region2_accuracy"] - df["divtree_lambda0_accuracy"]
-print(f"Mean difference: {difference.mean():.4f}")
-```
+**Method Metrics** (for each of the 8 methods):
+- `divtree_lambda0_{metric}` or `divtree_lambda{λ}_region2_{metric}`
+- Where `{metric}` includes: `accuracy`, `acc_region_1`, `acc_region_2`, `acc_region_3`, `acc_region_4`, `fnr_region_2`, `precision_region_2`, `recall_region_2`, `f1_region_1`, `f1_region_2`, `f1_region_3`, `f1_region_4`, `balanced_accuracy`, `mcc`, `n_leaves`, `runtime`, `cpu_time`
 
 ## Dependencies
 
 - **pandas**: DataFrame management
 - **numpy**: Numerical operations
-- **scikit-learn**: Metrics (accuracy, F1, MCC, balanced_accuracy), DecisionTreeClassifier
-- **scipy**: Statistical tests (t-test)
+- **scikit-learn**: Metrics and DecisionTreeClassifier
+- **scipy**: Statistical tests (paired t-test)
 - **matplotlib**: Visualizations
 - **optuna**: Hyperparameter tuning
 - **joblib**: Parallel processing
@@ -345,18 +299,9 @@ print(f"Mean difference: {difference.mean():.4f}")
 
 ## Notes
 
-- **Random Seeds**: Each simulation uses a unique seed based on simulation_id for reproducibility
+- **Random Seeds**: Each simulation uses a unique seed based on `simulation_id` for reproducibility
 - **Error Handling**: If a single simulation fails, it continues and marks metrics as NaN
-- **Incremental Saving**: Random space comparison saves results incrementally after each batch
+- **Incremental Saving**: Results are saved after each batch of 1000 simulations
 - **Memory**: Large simulations may require significant memory for storing all results
 - **Parallelization**: Uses joblib for parallel execution, leaving 1 CPU core free for system tasks
-
-## Configuration
-
-All configuration is in `config.py`:
-- Search spaces for each aspect
-- Default baseline values
-- Hyperparameters for algorithms
-- Number of replications
-
-Modify `config.py` to change simulation settings.
+- **Data Reuse**: Generated data is saved and reused if available, improving efficiency for repeated runs

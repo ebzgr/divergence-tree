@@ -1,11 +1,11 @@
 """
 Evaluation metrics for divergence tree comparison.
 
-Implements comprehensive evaluation metrics including accuracy, FNR, F1, MCC, RIG, etc.
+Implements comprehensive evaluation metrics including accuracy, FNR, F1, MCC, etc.
 """
 
 import numpy as np
-from typing import Dict, Any, Tuple
+from typing import Dict
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
@@ -98,101 +98,5 @@ def compute_all_metrics(
     except:
         metrics[f"{prefix}mcc"] = np.nan
 
-    # RIG (Relative Information Gain)
-    metrics[f"{prefix}rig"] = compute_rig(y_true, y_pred)
-
     return metrics
-
-
-def compute_rig(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """
-    Compute Relative Information Gain (RIG) for multiclass classification.
-
-    RIG = (H_baseline - H_model) / H_baseline
-    where H is entropy: H = -Σ p_i * log(p_i)
-
-    Baseline: uniform distribution (1/4 for each class)
-    Model: predicted class distribution
-
-    Parameters
-    ----------
-    y_true : np.ndarray
-        True region type labels (1-4).
-    y_pred : np.ndarray
-        Predicted region type labels (1-4).
-
-    Returns
-    -------
-    float
-        RIG value. Returns 0 if baseline entropy is 0.
-    """
-    n = len(y_pred)
-    if n == 0:
-        return np.nan
-
-    # Baseline: uniform distribution (entropy = log(4))
-    n_classes = 4
-    h_baseline = np.log(n_classes)
-
-    # Model: predicted class distribution
-    unique_pred, counts_pred = np.unique(y_pred, return_counts=True)
-    probs_pred = counts_pred / n
-
-    # Compute entropy of predicted distribution
-    # Add small epsilon to avoid log(0)
-    eps = 1e-10
-    h_model = -np.sum(probs_pred * np.log(probs_pred + eps))
-
-    # RIG = (H_baseline - H_model) / H_baseline
-    if h_baseline == 0:
-        return 0.0
-
-    rig = (h_baseline - h_model) / h_baseline
-    return rig
-
-
-def compute_confusion_matrix_metrics(
-    y_true: np.ndarray, y_pred: np.ndarray
-) -> Dict[str, Any]:
-    """
-    Compute confusion matrix and related metrics.
-
-    Parameters
-    ----------
-    y_true : np.ndarray
-        True region type labels (1-4).
-    y_pred : np.ndarray
-        Predicted region type labels (1-4).
-
-    Returns
-    -------
-    dict
-        Dictionary containing confusion matrix and per-class metrics.
-    """
-    cm = confusion_matrix(y_true, y_pred, labels=[1, 2, 3, 4])
-
-    # Per-class precision, recall, F1
-    per_class_metrics = {}
-    for i, region in enumerate([1, 2, 3, 4]):
-        tp = cm[i, i]
-        fp = cm[:, i].sum() - tp
-        fn = cm[i, :].sum() - tp
-        tn = cm.sum() - tp - fp - fn
-
-        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        f1 = (
-            2 * precision * recall / (precision + recall)
-            if (precision + recall) > 0
-            else 0.0
-        )
-
-        per_class_metrics[f"region_{region}_precision"] = precision
-        per_class_metrics[f"region_{region}_recall"] = recall
-        per_class_metrics[f"region_{region}_f1"] = f1
-
-    return {
-        "confusion_matrix": cm,
-        **per_class_metrics,
-    }
 

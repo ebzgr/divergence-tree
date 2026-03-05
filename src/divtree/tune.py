@@ -112,6 +112,176 @@ def pseudo_outcome_cv_loss(
     return float(np.mean(losses))
 
 
+def pseudo_outcome_holdout_loss(
+    X_train: np.ndarray,
+    T_train: np.ndarray,
+    YF_train: np.ndarray,
+    YC_train: np.ndarray,
+    X_val: np.ndarray,
+    T_val: np.ndarray,
+    YF_val: np.ndarray,
+    YC_val: np.ndarray,
+    params: Dict[str, Any],
+) -> float:
+    """
+    Compute pseudo-outcome MSE loss on a held-out validation set.
+
+    Fits DivergenceTree on (X_train, T_train, YF_train, YC_train) and evaluates
+    pseudo-outcome MSE on (X_val, T_val, YF_val, YC_val).
+
+    Parameters
+    ----------
+    X_train, T_train, YF_train, YC_train : np.ndarray
+        Training data.
+    X_val, T_val, YF_val, YC_val : np.ndarray
+        Validation data.
+    params : dict
+        Hyperparameters for DivergenceTree.
+
+    Returns
+    -------
+    float
+        Pseudo-outcome MSE loss on validation set.
+    """
+    n_val = X_val.shape[0]
+    if len(T_val) != n_val or len(YF_val) != n_val or len(YC_val) != n_val:
+        raise ValueError(
+            f"Validation arrays must have matching lengths: "
+            f"X_val={n_val}, T_val={len(T_val)}, YF_val={len(YF_val)}, YC_val={len(YC_val)}"
+        )
+
+    mask_C = ~np.isnan(YC_val)
+    T_F = (2 * T_val - 1) * YF_val
+    T_C = (2 * T_val - 1) * np.nan_to_num(YC_val, nan=0.0)
+
+    try:
+        tree = DivergenceTree(**params)
+        tree.fit(X_train, T_train, YF_train, YC_train)
+
+        leaves_val = tree.predict_leaf(X_val)
+        tauF_hat = np.nan_to_num([leaf.tauF for leaf in leaves_val], nan=0.0)
+        tauC_hat = np.nan_to_num([leaf.tauC for leaf in leaves_val], nan=0.0)
+    except Exception:
+        return 1e6
+
+    err_F = (T_F - 0.5 * tauF_hat) ** 2
+    firm_loss = np.mean(err_F)
+
+    if np.any(mask_C):
+        err_C = (T_C[mask_C] - 0.5 * tauC_hat[mask_C]) ** 2
+        consumer_loss = np.mean(err_C)
+        loss = firm_loss + consumer_loss
+    else:
+        loss = firm_loss
+
+    return float(loss)
+
+
+def tune_with_optuna_holdout(
+    X_train: np.ndarray,
+    T_train: np.ndarray,
+    YF_train: np.ndarray,
+    YC_train: np.ndarray,
+    X_val: np.ndarray,
+    T_val: np.ndarray,
+    YF_val: np.ndarray,
+    YC_val: np.ndarray,
+    fixed: Optional[Dict[str, Any]] = None,
+    search_space: Optional[Dict[str, Dict[str, Any]]] = None,
+    n_trials: int = 50,
+    random_state: Optional[int] = 123,
+    verbose: bool = True,
+) -> Tuple[Dict[str, Any], float]:
+    """
+    Hyperparameter tuning using Optuna with a held-out validation set.
+
+    Uses validation set (instead of K-fold CV) to evaluate pseudo-outcome MSE loss.
+    Fits on train, evaluates on val for each trial.
+
+    Parameters
+    ----------
+    X_train, T_train, YF_train, YC_train : np.ndarray
+        Training data.
+    X_val, T_val, YF_val, YC_val : np.ndarray
+        Validation data.
+    fixed : dict, optional
+        Fixed hyperparameters for DivergenceTree.
+    search_space : dict, optional
+        Search space for tuned parameters.
+    n_trials : int, default=50
+        Number of Optuna trials.
+    random_state : int, optional
+        Random seed for Optuna sampler.
+    verbose : bool, default=True
+        Whether to show progress.
+
+    Returns
+    -------
+    best_params : dict
+        Best hyperparameters found.
+    best_loss : float
+        Best validation pseudo-outcome MSE loss.
+    """
+    fixed = dict(fixed or {})
+    search_space = dict(search_space or {}) if search_space is not None else {}
+
+    if "max_partitions" not in search_space and "max_partitions" not in fixed:
+        search_space["max_partitions"] = {"low": 2, "high": 20}
+    if (
+        "min_improvement_ratio" not in search_space
+        and "min_improvement_ratio" not in fixed
+    ):
+        search_space["min_improvement_ratio"] = {"low": 0.001, "high": 0.1, "log": True}
+
+    def objective(trial):
+        params = dict(fixed)
+
+        for name, spec in search_space.items():
+            if name in fixed:
+                continue
+
+            if "log" in spec and spec["log"]:
+                params[name] = trial.suggest_float(
+                    name, spec["low"], spec["high"], log=True
+                )
+            elif isinstance(spec["low"], float) or isinstance(spec["high"], float):
+                params[name] = trial.suggest_float(name, spec["low"], spec["high"])
+            else:
+                step = spec.get("step", 1)
+                params[name] = trial.suggest_int(
+                    name, spec["low"], spec["high"], step=step
+                )
+
+        loss = pseudo_outcome_holdout_loss(
+            X_train, T_train, YF_train, YC_train,
+            X_val, T_val, YF_val, YC_val,
+            params,
+        )
+        return loss if np.isfinite(loss) else 1e6
+
+    if verbose:
+        optuna.logging.set_verbosity(optuna.logging.INFO)
+    else:
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+    sampler = optuna.samplers.TPESampler(seed=random_state)
+    study = optuna.create_study(direction="minimize", sampler=sampler)
+    study.optimize(objective, n_trials=n_trials, show_progress_bar=verbose)
+
+    if len(study.trials) == 0 or study.best_trial is None:
+        raise RuntimeError(
+            "No successful trials completed. Check that tree fitting "
+            "succeeds with the provided parameters."
+        )
+
+    tuned = {k: v for k, v in study.best_trial.params.items() if k != "random_state"}
+    best_params = dict(fixed)
+    best_params.update(tuned)
+    best_loss = study.best_value
+
+    return best_params, best_loss
+
+
 def tune_with_optuna(
     X: np.ndarray,
     T: np.ndarray,

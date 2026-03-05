@@ -130,6 +130,9 @@ class TwoStepDivergenceTree:
         classification_tree_tune_n_trials: Optional[int] = None,
         classification_tree_tune_n_splits: Optional[int] = None,
         classification_tree_scoring: str = "accuracy",
+        max_leaf_nodes: Optional[int] = None,
+        tune_max_leaf_nodes: bool = False,
+        max_leaf_nodes_search_space: Optional[Dict[str, int]] = None,
         verbose: bool = True,
     ) -> None:
         """
@@ -152,6 +155,15 @@ class TwoStepDivergenceTree:
             Number of CV folds for classification tree tuning. Default: 5.
         classification_tree_scoring : str, default="accuracy"
             Scoring function for classification tree tuning.
+        max_leaf_nodes : int, optional
+            If provided, use this value for max_leaf_nodes and skip tuning.
+            Overrides auto_tune_classification_tree (no tuning when set).
+        tune_max_leaf_nodes : bool, default=False
+            If True and auto_tune_classification_tree is True, include max_leaf_nodes
+            in the Optuna search space.
+        max_leaf_nodes_search_space : dict, optional
+            Search range for max_leaf_nodes when tune_max_leaf_nodes is True.
+            Expected keys: "low", "high". Default: {"low": 2, "high": 50}.
         verbose : bool, default=True
             Whether to show progress output.
         """
@@ -163,6 +175,19 @@ class TwoStepDivergenceTree:
         # Store fit data
         if "X" not in self._fit_data:
             self._fit_data["X"] = X
+        
+        # max_leaf_nodes override: skip tuning and use fixed value
+        if max_leaf_nodes is not None:
+            auto_tune_classification_tree = False
+            # Use minimal constraints so tree can reach exactly max_leaf_nodes leaves
+            self.classification_tree_params = {
+                "max_leaf_nodes": max_leaf_nodes,
+                "max_depth": None,
+                "min_samples_split": 2,
+                "min_samples_leaf": 1,
+                **{k: v for k, v in self.classification_tree_params.items()
+                   if k in ("random_state",)},
+            }
         
         # Default to True if None
         if auto_tune_classification_tree is None:
@@ -189,6 +214,8 @@ class TwoStepDivergenceTree:
                 n_trials=classification_tree_tune_n_trials,
                 n_splits=classification_tree_tune_n_splits,
                 scoring=classification_tree_scoring,
+                tune_max_leaf_nodes=tune_max_leaf_nodes,
+                max_leaf_nodes_search_space=max_leaf_nodes_search_space,
                 verbose=verbose,
             )
             if verbose:
@@ -217,6 +244,7 @@ class TwoStepDivergenceTree:
         YF: np.ndarray,
         YC: np.ndarray,
         auto_tune_classification_tree: Optional[bool] = None,
+        fit_classification_tree: bool = True,
         classification_tree_tune_n_trials: Optional[int] = None,
         classification_tree_tune_n_splits: Optional[int] = None,
         classification_tree_scoring: str = "accuracy",
@@ -239,6 +267,10 @@ class TwoStepDivergenceTree:
         auto_tune_classification_tree : bool, optional
             If True or None, automatically tunes the classification tree hyperparameters.
             If False, uses the provided `classification_tree_params`.
+        fit_classification_tree : bool, default=True
+            If True, fit the classification tree after fitting CausalForests.
+            If False, only fit CausalForests (useful when calling _fit_classification_tree_step
+            separately with custom parameters).
         classification_tree_tune_n_trials : int, optional
             Number of Optuna trials for classification tree tuning. Default: 30.
         classification_tree_tune_n_splits : int, optional
@@ -377,44 +409,47 @@ class TwoStepDivergenceTree:
             **fit_kwargs_C
         )
 
-        # Predict treatment effects for all observations
-        if verbose:
-            print("Predicting treatment effects...")
-        self.tauF_ = self.causal_forest_F_.effect(X)
-        self.tauC_ = self.causal_forest_C_.effect(X)
-
-        # Step 2: Categorize observations into 4 region types
-        if verbose:
-            print("Categorizing observations into region types...")
-        self.region_types_ = self._categorize_region_types(self.tauF_, self.tauC_)
-
-        # Step 3: Train classification tree (with optional auto-tuning)
-        if auto_tune_classification_tree:
+        if fit_classification_tree:
+            # Predict treatment effects for all observations
             if verbose:
-                print("Auto-tuning classification tree hyperparameters...")
-            ct_params, ct_score = self._tune_classification_tree(
-                X, 
-                self.region_types_,
-                n_trials=classification_tree_tune_n_trials,
-                n_splits=classification_tree_tune_n_splits,
-                scoring=classification_tree_scoring,
-                verbose=verbose,
+                print("Predicting treatment effects...")
+            self.tauF_ = self.causal_forest_F_.effect(X)
+            self.tauC_ = self.causal_forest_C_.effect(X)
+
+            # Step 2: Categorize observations into 4 region types
+            if verbose:
+                print("Categorizing observations into region types...")
+            self.region_types_ = self._categorize_region_types(self.tauF_, self.tauC_)
+
+            # Step 3: Train classification tree (with optional auto-tuning)
+            if auto_tune_classification_tree:
+                if verbose:
+                    print("Auto-tuning classification tree hyperparameters...")
+                ct_params, ct_score = self._tune_classification_tree(
+                    X, 
+                    self.region_types_,
+                    n_trials=classification_tree_tune_n_trials,
+                    n_splits=classification_tree_tune_n_splits,
+                    scoring=classification_tree_scoring,
+                    tune_max_leaf_nodes=False,
+                    max_leaf_nodes_search_space=None,
+                    verbose=verbose,
+                )
+                if verbose:
+                    if classification_tree_scoring == "accuracy":
+                        print(f"  Best classification tree accuracy: {ct_score:.6f}")
+                    else:
+                        print(f"  Best classification tree {classification_tree_scoring}: {ct_score:.6f}")
+                # Update classification_tree_params with tuned values
+                self.classification_tree_params.update(ct_params)
+            else:
+                if verbose:
+                    print("Training classification tree with provided parameters...")
+
+            self.classification_tree_ = DecisionTreeClassifier(
+                **self.classification_tree_params
             )
-            if verbose:
-                if classification_tree_scoring == "accuracy":
-                    print(f"  Best classification tree accuracy: {ct_score:.6f}")
-                else:
-                    print(f"  Best classification tree {classification_tree_scoring}: {ct_score:.6f}")
-            # Update classification_tree_params with tuned values
-            self.classification_tree_params.update(ct_params)
-        else:
-            if verbose:
-                print("Training classification tree with provided parameters...")
-
-        self.classification_tree_ = DecisionTreeClassifier(
-            **self.classification_tree_params
-        )
-        self.classification_tree_.fit(X, self.region_types_)
+            self.classification_tree_.fit(X, self.region_types_)
 
         if verbose:
             print("Two-step divergence tree fitting complete!")
@@ -565,6 +600,8 @@ class TwoStepDivergenceTree:
         n_trials: Optional[int] = None,
         n_splits: Optional[int] = None,
         scoring: str = "accuracy",
+        tune_max_leaf_nodes: bool = False,
+        max_leaf_nodes_search_space: Optional[Dict[str, int]] = None,
         verbose: bool = True,
     ) -> Tuple[Dict[str, Any], float]:
         """
@@ -588,6 +625,11 @@ class TwoStepDivergenceTree:
             - "accuracy": Classification accuracy (maximize)
             - "fnr_region_1", "fnr_region_2", "fnr_region_3", "fnr_region_4": 
               False Negative Rate for the specified region (minimize)
+        tune_max_leaf_nodes : bool, default=False
+            If True, include max_leaf_nodes in the search space.
+        max_leaf_nodes_search_space : dict, optional
+            Search range for max_leaf_nodes when tune_max_leaf_nodes is True.
+            Expected keys: "low", "high". Default: {"low": 2, "high": 50}.
         verbose : bool, default=True
             Whether to show Optuna progress output.
 
@@ -610,6 +652,9 @@ class TwoStepDivergenceTree:
             search_space["min_samples_split"] = {"low": 2, "high": 20}
         if "min_samples_leaf" not in self.classification_tree_params:
             search_space["min_samples_leaf"] = {"low": 1, "high": 10}
+        if tune_max_leaf_nodes and "max_leaf_nodes" not in self.classification_tree_params:
+            space = max_leaf_nodes_search_space or {"low": 2, "high": 50}
+            search_space["max_leaf_nodes"] = space
 
         if len(search_space) == 0:
             # No parameters to tune, return current params
@@ -674,6 +719,10 @@ class TwoStepDivergenceTree:
                 if name in fixed or name in ["min_samples_split", "min_samples_leaf"]:
                     continue
                 params[name] = trial.suggest_int(name, spec["low"], spec["high"])
+
+            # When tuning max_leaf_nodes, set max_depth=None so tree can reach that many leaves
+            if "max_leaf_nodes" in params:
+                params["max_depth"] = None
 
             # Add random_state if provided
             if random_state is not None:

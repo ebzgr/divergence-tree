@@ -1,11 +1,11 @@
 """
 Base simulation framework with shared utilities for method execution.
 
-This module provides common functions and base classes for running simulations
-that compare different methods (DivTree and TwoStepDivergenceTree).
+This module provides common functions for running lambda comparison simulations
+using DivergenceTree.
 """
 
-# Set environment variables to disable threading in joblib/econml BEFORE any imports
+# Set environment variables to disable threading in joblib BEFORE any imports
 import os
 os.environ['OMP_NUM_THREADS'] = '1'
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
@@ -21,7 +21,12 @@ import pandas as pd
 from typing import Dict, Any, List, Tuple, Optional
 from joblib import Parallel, delayed
 import gc
-from multiprocessing import Manager
+
+try:
+    import resource
+    _HAS_RESOURCE = True
+except ImportError:
+    _HAS_RESOURCE = False
 
 # Add paths for imports
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -34,77 +39,13 @@ from binary_data_generator import generate_binary_comparison_data
 
 sys.path.append(os.path.join(PROJECT_ROOT, "src"))
 from divtree.tree import DivergenceTree
-from divtree.tune import tune_with_optuna as tune_divtree
+from divtree.tune import tune_with_optuna_holdout
 from twostepdivtree.tree import TwoStepDivergenceTree
-from sklearn.tree import DecisionTreeClassifier
 
 # Import local modules
 import config
 import utils
 from metrics import compute_all_metrics
-
-
-# ============================================================================
-# Global Semaphore for Limiting Concurrent CausalForest Builds
-# ============================================================================
-
-# Global semaphore and manager to limit concurrent CausalForest builds across all workers
-# These will be initialized by the main process and shared via Manager
-_causal_forest_semaphore = None
-_semaphore_manager = None
-
-
-def init_causal_forest_semaphore(max_concurrent: int = 2):
-    """
-    Initialize a shared semaphore to limit concurrent CausalForest builds.
-    
-    This should be called once before starting parallel execution to prevent
-    memory issues from too many CausalForests being built simultaneously.
-    
-    The semaphore is created using multiprocessing.Manager() which allows
-    it to be shared across worker processes spawned by joblib. The Manager
-    server process must remain alive for the semaphore to work.
-    
-    Parameters
-    ----------
-    max_concurrent : int, default=2
-        Maximum number of CausalForest builds that can run concurrently
-        across all workers. Lower values use less memory but may be slower.
-    
-    Returns
-    -------
-    multiprocessing.synchronize.Semaphore
-        The shared semaphore that can be used by worker processes.
-    """
-    global _causal_forest_semaphore, _semaphore_manager
-    
-    if _causal_forest_semaphore is None:
-        _semaphore_manager = Manager()
-        _causal_forest_semaphore = _semaphore_manager.Semaphore(max_concurrent)
-        # Store manager reference to keep it alive
-    
-    return _causal_forest_semaphore
-
-
-def get_causal_forest_semaphore():
-    """
-    Get the global CausalForest semaphore.
-    
-    Note: With multiprocessing spawn (Windows), worker processes won't have
-    access to module-level variables set in the main process. However, the
-    Manager server process runs independently, and the semaphore proxy
-    should be accessible if properly initialized.
-    
-    For this to work, init_causal_forest_semaphore() must be called in the
-    main process before starting parallel execution, and the Manager must
-    remain alive (which it will as long as the main process is running).
-    
-    Returns
-    -------
-    multiprocessing.synchronize.Semaphore or None
-        The semaphore if initialized, None otherwise.
-    """
-    return _causal_forest_semaphore
 
 
 # ============================================================================
@@ -156,9 +97,10 @@ def generate_data_with_params(
 ) -> Tuple[
     np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray,
     np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray,
+    np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray,
     Dict[str, Any],
 ]:
-    """Generate data with specified parameters."""
+    """Generate data with train/validation/test split (60/20/20)."""
     n_categories = [60 // sparsity] * sparsity
     n_users_total = n_users_train + n_users_test
     
@@ -180,17 +122,28 @@ def generate_data_with_params(
         random_seed=random_seed,
     )
     
-    # Split into train and test sets
+    # Split into train (60%), validation (20%), test (20%)
     rng = np.random.default_rng(random_seed)
     indices = rng.permutation(n_users_total)
-    train_indices = indices[:n_users_train]
-    test_indices = indices[n_users_train:]
+    n_train = int(config.TRAIN_FRAC * n_users_total)
+    n_val = int(config.VAL_FRAC * n_users_total)
+    n_test = n_users_total - n_train - n_val
+    
+    train_indices = indices[:n_train]
+    val_indices = indices[n_train : n_train + n_val]
+    test_indices = indices[n_train + n_val :]
     
     X_train = X_all[train_indices]
     T_train = T_all[train_indices]
     YF_train = YF_all[train_indices]
     YC_train = YC_all[train_indices]
     region_type_train = region_type_all[train_indices]
+    
+    X_val = X_all[val_indices]
+    T_val = T_all[val_indices]
+    YF_val = YF_all[val_indices]
+    YC_val = YC_all[val_indices]
+    region_type_val = region_type_all[val_indices]
     
     X_test = X_all[test_indices]
     T_test = T_all[test_indices]
@@ -200,9 +153,25 @@ def generate_data_with_params(
     
     return (
         X_train, T_train, YF_train, YC_train, region_type_train,
+        X_val, T_val, YF_val, YC_val, region_type_val,
         X_test, T_test, YF_test, YC_test, region_type_test,
         functional_form,
     )
+
+
+# ============================================================================
+# CPU Time Measurement
+# ============================================================================
+
+def get_cpu_time() -> float:
+    """
+    Return current process CPU time (user + system) in seconds.
+    Uses resource.getrusage on Linux/Unix; falls back to time.process_time() on Windows.
+    """
+    if _HAS_RESOURCE:
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        return usage.ru_utime + usage.ru_stime
+    return time.process_time()
 
 
 # ============================================================================
@@ -214,6 +183,10 @@ def run_divtree_method(
     T_train: np.ndarray,
     YF_train: np.ndarray,
     YC_train: np.ndarray,
+    X_val: np.ndarray,
+    T_val: np.ndarray,
+    YF_val: np.ndarray,
+    YC_val: np.ndarray,
     X_test: np.ndarray,
     region_type_test: np.ndarray,
     lambda_: float,
@@ -223,17 +196,16 @@ def run_divtree_method(
 ) -> Dict[str, Any]:
     """
     Run DivergenceTree with specified parameters.
-    
+
+    Uses validation set for hyperparameter tuning.
+    Fits final model on train+val, evaluates on test test.
+
     Parameters
     ----------
-    X_train : np.ndarray
-        Training feature matrix.
-    T_train : np.ndarray
-        Training treatment indicator.
-    YF_train : np.ndarray
-        Training firm outcome.
-    YC_train : np.ndarray
-        Training consumer outcome.
+    X_train, T_train, YF_train, YC_train : np.ndarray
+        Training data.
+    X_val, T_val, YF_val, YC_val : np.ndarray
+        Validation data (for hyperparameter tuning).
     X_test : np.ndarray
         Test feature matrix.
     region_type_test : np.ndarray
@@ -246,7 +218,7 @@ def run_divtree_method(
         Random seed for reproducibility.
     verbose : bool, default=False
         Whether to print progress.
-    
+
     Returns
     -------
     dict
@@ -255,7 +227,8 @@ def run_divtree_method(
     result = {}
     try:
         start_time = time.time()
-        
+        cpu_start = get_cpu_time()
+
         fixed_params = {
             "lambda_": lambda_,
             "n_quantiles": config.DIVTREE_FIXED_PARAMS.get("n_quantiles", 2),
@@ -264,20 +237,26 @@ def run_divtree_method(
         }
         if regions_of_interest is not None:
             fixed_params["regions_of_interest"] = regions_of_interest
-        
-        best_params, _ = tune_divtree(
+
+        best_params, _ = tune_with_optuna_holdout(
             X_train, T_train, YF_train, YC_train,
+            X_val, T_val, YF_val, YC_val,
             fixed=fixed_params,
             search_space=config.DIVTREE_SEARCH_SPACE,
             n_trials=config.DIVTREE_N_TRIALS,
-            n_splits=config.DIVTREE_N_SPLITS,
             random_state=random_seed,
             verbose=verbose,
         )
-        
+
+        # Fit final model on train+val, evaluate on test
+        X_trainval = np.concatenate([X_train, X_val], axis=0)
+        T_trainval = np.concatenate([T_train, T_val], axis=0)
+        YF_trainval = np.concatenate([YF_train, YF_val], axis=0)
+        YC_trainval = np.concatenate([YC_train, YC_val], axis=0)
+
         divtree = DivergenceTree(**best_params)
-        divtree.fit(X_train, T_train, YF_train, YC_train)
-        
+        divtree.fit(X_trainval, T_trainval, YF_trainval, YC_trainval)
+
         region_type_pred_test = divtree.predict_region_type(X_test)
         region_type_pred_train = divtree.predict_region_type(X_train)
         
@@ -286,12 +265,14 @@ def run_divtree_method(
         
         metrics = compute_all_metrics(region_type_test, region_type_pred_test, method_name="")
         runtime = time.time() - start_time
+        cpu_time = get_cpu_time() - cpu_start
         
         result = {
             "region_type_pred_train": region_type_pred_train,
             "region_type_pred_test": region_type_pred_test,
             "n_leaves": n_leaves,
             "runtime": runtime,
+            "cpu_time": cpu_time,
         }
         result.update(metrics)
         
@@ -301,10 +282,11 @@ def run_divtree_method(
             "region_type_pred_test": None,
             "n_leaves": np.nan,
             "runtime": np.nan,
+            "cpu_time": np.nan,
         }
         for metric in ["accuracy", "acc_region_1", "acc_region_2", "acc_region_3", "acc_region_4",
                        "fnr_region_2", "f1_region_1", "f1_region_2", "f1_region_3", "f1_region_4",
-                       "balanced_accuracy", "mcc", "rig"]:
+                       "balanced_accuracy", "mcc"]:
             result[metric] = np.nan
     
     return result
@@ -315,158 +297,147 @@ def run_twostep_method(
     T_train: np.ndarray,
     YF_train: np.ndarray,
     YC_train: np.ndarray,
+    X_val: np.ndarray,
+    T_val: np.ndarray,
+    YF_val: np.ndarray,
+    YC_val: np.ndarray,
     X_test: np.ndarray,
     region_type_test: np.ndarray,
+    n_leaves_divtree2: int,
     random_seed: int,
-    max_leaf_nodes: Optional[int] = None,
-    classification_tree_scoring: str = "accuracy",
     verbose: bool = False,
-    causal_forest_F=None,
-    causal_forest_C=None,
-    return_tree: bool = False,
 ) -> Dict[str, Any]:
     """
-    Run TwoStepDivergenceTree with specified parameters.
-    
+    Run TwoStepDivergenceTree with two variants: tuned max_leaf_nodes and fixed max_leaf_nodes.
+
+    Fits CausalForests once on train+val, then fits two classification trees:
+    - Variant A (tuned): max_leaf_nodes tuned via Optuna
+    - Variant B (fixed): max_leaf_nodes = n_leaves_divtree2
+
     Parameters
     ----------
-    X_train : np.ndarray
-        Training feature matrix.
-    T_train : np.ndarray
-        Training treatment indicator.
-    YF_train : np.ndarray
-        Training firm outcome.
-    YC_train : np.ndarray
-        Training consumer outcome.
+    X_train, T_train, YF_train, YC_train : np.ndarray
+        Training data.
+    X_val, T_val, YF_val, YC_val : np.ndarray
+        Validation data.
     X_test : np.ndarray
         Test feature matrix.
     region_type_test : np.ndarray
         True region types for test set.
+    n_leaves_divtree2 : int
+        Number of leaves from DivTree with lambda=2 (for variant B).
     random_seed : int
         Random seed for reproducibility.
-    max_leaf_nodes : Optional[int], default=None
-        Maximum number of leaf nodes for classification tree.
-        If None, no constraint is applied.
-    classification_tree_scoring : str, default="accuracy"
-        Scoring function for classification tree tuning.
-        Options: "accuracy", "fnr_region_1", "fnr_region_2", "fnr_region_3", "fnr_region_4"
     verbose : bool, default=False
         Whether to print progress.
-    
+
     Returns
     -------
     dict
-        Dictionary containing metrics, predictions, n_leaves, and runtime.
+        Dictionary with twostep_tuned_*, twostep_fixed_* metrics and CPU times.
     """
     result = {}
     try:
-        start_time = time.time()
-        
-        # Prepare classification tree parameters
-        classification_tree_params = {
+        X_trainval = np.concatenate([X_train, X_val], axis=0)
+        T_trainval = np.concatenate([T_train, T_val], axis=0)
+        YF_trainval = np.concatenate([YF_train, YF_val], axis=0)
+        YC_trainval = np.concatenate([YC_train, YC_val], axis=0)
+
+        causal_params = {
+            **config.TWOSTEP_CAUSAL_FOREST_PARAMS,
             "random_state": random_seed,
         }
-        if max_leaf_nodes is not None:
-            classification_tree_params["max_leaf_nodes"] = max_leaf_nodes
-        
-        # Create TwoStepDivergenceTree
-        twostep_tree = TwoStepDivergenceTree(
-            causal_forest_params={
-                **config.TWOSTEP_CAUSAL_FOREST_PARAMS,
-                "random_state": random_seed,
-            },
-            classification_tree_params=classification_tree_params,
-            causal_forest_tune_params=config.TWOSTEP_CAUSAL_FOREST_TUNE_PARAMS,
+        classification_params = {"random_state": random_seed}
+
+        twostep = TwoStepDivergenceTree(
+            causal_forest_params=causal_params,
+            classification_tree_params=classification_params,
+            causal_forest_tune_params={},
         )
-        
-        # If pre-built CausalForests are provided, reuse them (skip step 1)
-        if causal_forest_F is not None and causal_forest_C is not None:
-            # Set pre-built forests and only train classification tree (step 2)
-            twostep_tree.causal_forest_F_ = causal_forest_F
-            twostep_tree.causal_forest_C_ = causal_forest_C
-            twostep_tree._fit_classification_tree_step(
-                X_train,
-                auto_tune_classification_tree=config.TWOSTEP_AUTO_TUNE_CLASSIFICATION_TREE,
-                classification_tree_tune_n_trials=config.TWOSTEP_CLASSIFICATION_TREE_TUNE_N_TRIALS,
-                classification_tree_tune_n_splits=config.TWOSTEP_CLASSIFICATION_TREE_TUNE_N_SPLITS,
-                classification_tree_scoring=classification_tree_scoring,
-                verbose=verbose,
-            )
-        else:
-            # Build CausalForests from scratch (normal flow)
-            treatment_probability = np.full(len(X_train), 0.5)
-            
-            # Acquire semaphore before building CausalForests to limit concurrent builds
-            semaphore = get_causal_forest_semaphore()
-            if semaphore is not None:
-                semaphore.acquire()
-                try:
-                    # Fit the tree
-                    twostep_tree.fit(
-                        X_train,
-                        T_train,
-                        YF_train,
-                        YC_train,
-                        auto_tune_classification_tree=config.TWOSTEP_AUTO_TUNE_CLASSIFICATION_TREE,
-                        classification_tree_tune_n_trials=config.TWOSTEP_CLASSIFICATION_TREE_TUNE_N_TRIALS,
-                        classification_tree_tune_n_splits=config.TWOSTEP_CLASSIFICATION_TREE_TUNE_N_SPLITS,
-                        classification_tree_scoring=classification_tree_scoring,
-                        treatment_probability=treatment_probability,
-                        verbose=verbose,
-                    )
-                finally:
-                    semaphore.release()
-            else:
-                # No semaphore initialized, run without limiting
-                twostep_tree.fit(
-                    X_train,
-                    T_train,
-                    YF_train,
-                    YC_train,
-                    auto_tune_classification_tree=config.TWOSTEP_AUTO_TUNE_CLASSIFICATION_TREE,
-                    classification_tree_tune_n_trials=config.TWOSTEP_CLASSIFICATION_TREE_TUNE_N_TRIALS,
-                    classification_tree_tune_n_splits=config.TWOSTEP_CLASSIFICATION_TREE_TUNE_N_SPLITS,
-                    classification_tree_scoring=classification_tree_scoring,
-                    treatment_probability=treatment_probability,
-                    verbose=verbose,
-                )
-        
-        # Predict on test set
-        region_type_pred_test = twostep_tree.predict_region_type(X_test)
-        region_type_pred_train = twostep_tree.predict_region_type(X_train)
-        
-        # Get number of leaves
-        leaf_effects = twostep_tree.leaf_effects()
-        n_leaves = len(leaf_effects["leaves"])
-        
-        # Compute metrics
-        metrics = compute_all_metrics(region_type_test, region_type_pred_test, method_name="")
-        runtime = time.time() - start_time
-        
+
+        # Step 1: Fit CausalForests only (no classification tree; we fit it separately below)
+        cpu_cf_start = get_cpu_time()
+        twostep.fit(
+            X_trainval, T_trainval, YF_trainval, YC_trainval,
+            auto_tune_classification_tree=False,
+            fit_classification_tree=False,
+            verbose=verbose,
+        )
+        cpu_causal_forest = get_cpu_time() - cpu_cf_start
+
+        # Step 2a: Variant A - tune classification tree (including max_leaf_nodes)
+        cpu_tuned_start = get_cpu_time()
+        twostep._fit_classification_tree_step(
+            X_trainval,
+            auto_tune_classification_tree=True,
+            classification_tree_tune_n_trials=config.TWOSTEP_CLASSIFICATION_TUNE_N_TRIALS,
+            classification_tree_tune_n_splits=config.TWOSTEP_CLASSIFICATION_TUNE_N_SPLITS,
+            tune_max_leaf_nodes=True,
+            max_leaf_nodes_search_space=config.TWOSTEP_CLASSIFICATION_TUNE_MAX_LEAF_NODES,
+            verbose=verbose,
+        )
+        pred_tuned_test = twostep.predict_region_type(X_test)
+        pred_tuned_train = twostep.predict_region_type(X_train)
+        tree = twostep.classification_tree_.tree_
+        n_leaves_tuned = int((tree.children_left == -1).sum())
+        cpu_tuned = get_cpu_time() - cpu_tuned_start
+
+        metrics_tuned = compute_all_metrics(region_type_test, pred_tuned_test, method_name="")
+
+        # Step 2b: Variant B - fixed max_leaf_nodes = n_leaves_divtree2
+        cpu_fixed_start = get_cpu_time()
+        twostep._fit_classification_tree_step(
+            X_trainval,
+            auto_tune_classification_tree=False,
+            max_leaf_nodes=n_leaves_divtree2,
+            verbose=verbose,
+        )
+        pred_fixed_test = twostep.predict_region_type(X_test)
+        pred_fixed_train = twostep.predict_region_type(X_train)
+        n_leaves_fixed = int((twostep.classification_tree_.tree_.children_left == -1).sum())
+        cpu_fixed = get_cpu_time() - cpu_fixed_start
+
+        metrics_fixed = compute_all_metrics(region_type_test, pred_fixed_test, method_name="")
+
         result = {
-            "region_type_pred_train": region_type_pred_train,
-            "region_type_pred_test": region_type_pred_test,
-            "n_leaves": n_leaves,
-            "runtime": runtime,
+            "twostep_tuned_region_type_pred_train": pred_tuned_train,
+            "twostep_tuned_region_type_pred_test": pred_tuned_test,
+            "twostep_fixed_region_type_pred_train": pred_fixed_train,
+            "twostep_fixed_region_type_pred_test": pred_fixed_test,
+            "twostep_tuned_n_leaves": n_leaves_tuned,
+            "twostep_fixed_n_leaves": n_leaves_fixed,
+            "twostep_causal_forest_cpu_time": cpu_causal_forest,
+            "twostep_tuned_cpu_time": cpu_tuned,
+            "twostep_fixed_cpu_time": cpu_fixed,
+            # Total CPU time = CausalForest + classification tree (for fair comparison with DivTree)
+            "twostep_tuned_total_cpu_time": cpu_causal_forest + cpu_tuned,
+            "twostep_fixed_total_cpu_time": cpu_causal_forest + cpu_fixed,
         }
-        result.update(metrics)
-        
-        # Optionally return the tree instance for extracting CausalForests
-        if return_tree:
-            result["_tree_instance"] = twostep_tree
-        
+        for k, v in metrics_tuned.items():
+            result[f"twostep_tuned_{k}"] = v
+        for k, v in metrics_fixed.items():
+            result[f"twostep_fixed_{k}"] = v
+
     except Exception:
         result = {
-            "region_type_pred_train": None,
-            "region_type_pred_test": None,
-            "n_leaves": np.nan,
-            "runtime": np.nan,
+            "twostep_tuned_region_type_pred_train": None,
+            "twostep_tuned_region_type_pred_test": None,
+            "twostep_fixed_region_type_pred_train": None,
+            "twostep_fixed_region_type_pred_test": None,
+            "twostep_tuned_n_leaves": np.nan,
+            "twostep_fixed_n_leaves": np.nan,
+            "twostep_causal_forest_cpu_time": np.nan,
+            "twostep_tuned_cpu_time": np.nan,
+            "twostep_fixed_cpu_time": np.nan,
+            "twostep_tuned_total_cpu_time": np.nan,
+            "twostep_fixed_total_cpu_time": np.nan,
         }
-        for metric in ["accuracy", "acc_region_1", "acc_region_2", "acc_region_3", "acc_region_4",
-                       "fnr_region_2", "f1_region_1", "f1_region_2", "f1_region_3", "f1_region_4",
-                       "balanced_accuracy", "mcc", "rig"]:
-            result[metric] = np.nan
-    
+        for prefix in ["twostep_tuned", "twostep_fixed"]:
+            for metric in ["accuracy", "acc_region_1", "acc_region_2", "acc_region_3", "acc_region_4",
+                          "fnr_region_2", "f1_region_1", "f1_region_2", "f1_region_3", "f1_region_4",
+                          "balanced_accuracy", "mcc"]:
+                result[f"{prefix}_{metric}"] = np.nan
+
     return result
 
 

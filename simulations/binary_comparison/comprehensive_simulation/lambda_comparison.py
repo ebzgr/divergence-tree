@@ -1,21 +1,17 @@
 """
-Lambda comparison simulation: Compare DivTree with lambda values 0, 1, 2, 3, 4, 6, 8, 10.
+Lambda and TwoStep comparison simulation.
 
-This simulation compares 8 DivergenceTree methods:
-1. DivergenceTree with lambda=0
-2. DivergenceTree with lambda=1, regions_of_interest=[2]
-3. DivergenceTree with lambda=2, regions_of_interest=[2]
-4. DivergenceTree with lambda=3, regions_of_interest=[2]
-5. DivergenceTree with lambda=4, regions_of_interest=[2]
-6. DivergenceTree with lambda=6, regions_of_interest=[2]
-7. DivergenceTree with lambda=8, regions_of_interest=[2]
-8. DivergenceTree with lambda=10, regions_of_interest=[2]
+Compares DivTree with lambda values 0, 1, 2, 4, 6, 8 and TwoStep with two variants:
+- TwoStep tuned: classification tree with max_leaf_nodes tuned via Optuna
+- TwoStep fixed: classification tree with max_leaf_nodes = n_leaves from DivTree lambda=2
 
-The generated data is saved for later use in method comparison.
+CausalForests are fit once per simulation and reused for both TwoStep variants.
+Results are saved to aggregated/lambda_twostep_comparison (separate from lambda_comparison).
 """
 
 import os
 import sys
+import gc
 import numpy as np
 import pandas as pd
 from typing import Dict, Any, Tuple
@@ -26,6 +22,7 @@ from simulation_base import (
     sample_random_aspects,
     generate_data_with_params,
     run_divtree_method,
+    run_twostep_method,
     run_single_task_with_retry,
 )
 
@@ -49,7 +46,7 @@ def run_single_lambda_simulation(
     verbose: bool = False,
 ) -> Dict[str, Any]:
     """
-    Run a single random simulation with all 8 lambda methods.
+    Run a single random simulation with DivTree (lambda 0,1,2,4,6,8) and TwoStep (tuned, fixed).
     
     Parameters
     ----------
@@ -74,44 +71,51 @@ def run_single_lambda_simulation(
         **aspect_values,
     }
     
-    # Lambda values to test
-    lambda_values = [0, 1, 2, 3, 4, 6, 8, 10]
+    # Lambda values to test (exclude 3 and 10)
+    lambda_values = [0, 1, 2, 4, 6, 8]
     
     try:
         data_size = aspect_values["data_size"]
         n_users_train = data_size
         n_users_test = data_size // 2
         
-        # Check if data already exists
-        data_dir = os.path.join(base_dir, "data", "lambda_comparison", f"simulation_{simulation_id:06d}")
+        # Check if data already exists (train/val/test format)
+        data_dir = os.path.join(base_dir, "data", "lambda_twostep_comparison", f"simulation_{simulation_id:06d}")
         train_data_file = os.path.join(data_dir, "train_data.pkl")
+        val_data_file = os.path.join(data_dir, "val_data.pkl")
         test_data_file = os.path.join(data_dir, "test_data.pkl")
         functional_form_file = os.path.join(data_dir, "functional_form.pickle")
-        
-        if os.path.exists(train_data_file) and os.path.exists(test_data_file) and os.path.exists(functional_form_file):
+
+        if all(os.path.exists(f) for f in [train_data_file, val_data_file, test_data_file, functional_form_file]):
             # Load existing data
             if verbose:
                 print(f"Loading existing data for simulation {simulation_id}")
             train_df = pd.read_pickle(train_data_file)
+            val_df = pd.read_pickle(val_data_file)
             test_df = pd.read_pickle(test_data_file)
             functional_form = utils.load_data(functional_form_file)["functional_form"]
-            
-            # Extract data from DataFrames
+
             X_train = train_df[[col for col in train_df.columns if col.startswith("feature_")]].values
             T_train = train_df["T"].values
             YF_train = train_df["YF"].values
             YC_train = train_df["YC"].values
             region_type_train = train_df["region_type_true"].values
-            
+
+            X_val = val_df[[col for col in val_df.columns if col.startswith("feature_")]].values
+            T_val = val_df["T"].values
+            YF_val = val_df["YF"].values
+            YC_val = val_df["YC"].values
+
             X_test = test_df[[col for col in test_df.columns if col.startswith("feature_")]].values
             T_test = test_df["T"].values
             YF_test = test_df["YF"].values
             YC_test = test_df["YC"].values
             region_type_test = test_df["region_type_true"].values
         else:
-            # Generate new data
+            # Generate new data (train/val/test 60/20/20)
             (
                 X_train, T_train, YF_train, YC_train, region_type_train,
+                X_val, T_val, YF_val, YC_val, region_type_val,
                 X_test, T_test, YF_test, YC_test, region_type_test,
                 functional_form,
             ) = generate_data_with_params(
@@ -124,7 +128,7 @@ def run_single_lambda_simulation(
                 n_users_test=n_users_test,
                 random_seed=random_seed,
             )
-            
+
             # Save data for later reuse
             utils.safe_makedirs(data_dir)
             train_df = pd.DataFrame(X_train, columns=[f"feature_{i}" for i in range(X_train.shape[1])])
@@ -132,22 +136,31 @@ def run_single_lambda_simulation(
             train_df["YF"] = YF_train
             train_df["YC"] = YC_train
             train_df["region_type_true"] = region_type_train
-            
+
+            val_df = pd.DataFrame(X_val, columns=[f"feature_{i}" for i in range(X_val.shape[1])])
+            val_df["T"] = T_val
+            val_df["YF"] = YF_val
+            val_df["YC"] = YC_val
+            val_df["region_type_true"] = region_type_val
+
             test_df = pd.DataFrame(X_test, columns=[f"feature_{i}" for i in range(X_test.shape[1])])
             test_df["T"] = T_test
             test_df["YF"] = YF_test
             test_df["YC"] = YC_test
             test_df["region_type_true"] = region_type_test
-            
+
             train_df.to_pickle(train_data_file)
+            val_df.to_pickle(val_data_file)
             test_df.to_pickle(test_data_file)
             utils.save_data({"functional_form": functional_form}, functional_form_file)
         
         # Run all lambda methods
         method_results = []
+        n_leaves_divtree2 = 4  # default fallback
         for lambda_val in lambda_values:
             method_result = run_divtree_method(
                 X_train, T_train, YF_train, YC_train,
+                X_val, T_val, YF_val, YC_val,
                 X_test, region_type_test,
                 lambda_=float(lambda_val),
                 regions_of_interest=None if lambda_val == 0 else [2],
@@ -155,6 +168,10 @@ def run_single_lambda_simulation(
                 verbose=False,
             )
             method_results.append((lambda_val, method_result))
+            if lambda_val == 2:
+                n_leaves = method_result.get("n_leaves")
+                if n_leaves is not None and np.isfinite(n_leaves):
+                    n_leaves_divtree2 = max(2, int(n_leaves))
             
             # Store results with appropriate prefix
             if lambda_val == 0:
@@ -165,6 +182,20 @@ def run_single_lambda_simulation(
             for k, v in method_result.items():
                 if k not in ["region_type_pred_train", "region_type_pred_test"]:
                     result[f"{prefix}_{k}"] = v
+        
+        # Run TwoStep (CausalForests once, two classification tree variants)
+        twostep_result = run_twostep_method(
+            X_train, T_train, YF_train, YC_train,
+            X_val, T_val, YF_val, YC_val,
+            X_test, region_type_test,
+            n_leaves_divtree2=n_leaves_divtree2,
+            random_seed=random_seed,
+            verbose=False,
+        )
+        for k, v in twostep_result.items():
+            if k not in ["twostep_tuned_region_type_pred_train", "twostep_tuned_region_type_pred_test",
+                         "twostep_fixed_region_type_pred_train", "twostep_fixed_region_type_pred_test"]:
+                result[k] = v
         
         # Update DataFrames with predictions and save
         for lambda_val, method_result in method_results:
@@ -186,6 +217,14 @@ def run_single_lambda_simulation(
             else:
                 test_df[col_name] = np.nan
         
+        # Add TwoStep predictions to DataFrames
+        for prefix in ["twostep_tuned", "twostep_fixed"]:
+            pred_train = twostep_result.get(f"{prefix}_region_type_pred_train")
+            pred_test = twostep_result.get(f"{prefix}_region_type_pred_test")
+            col_name = f"{prefix}_region_pred"
+            train_df[col_name] = pred_train if pred_train is not None else np.nan
+            test_df[col_name] = pred_test if pred_test is not None else np.nan
+        
         # Save updated DataFrames
         train_df.to_pickle(train_data_file)
         test_df.to_pickle(test_data_file)
@@ -196,15 +235,32 @@ def run_single_lambda_simulation(
             "accuracy", "acc_region_1", "acc_region_2", "acc_region_3", "acc_region_4",
             "fnr_region_2", "f1_region_1", "f1_region_2", "f1_region_3", "f1_region_4",
             "precision_region_2", "recall_region_2",
-            "balanced_accuracy", "mcc", "rig", "n_leaves", "runtime"
+            "balanced_accuracy", "mcc", "n_leaves", "runtime", "cpu_time"
         ]
         method_prefixes = ["divtree_lambda0"]
-        for lambda_val in [1, 2, 3, 4, 6, 8, 10]:
+        for lambda_val in [1, 2, 4, 6, 8]:
             method_prefixes.append(f"divtree_lambda{lambda_val}_region2")
         
         for method_prefix in method_prefixes:
             for metric in metrics:
                 result[f"{method_prefix}_{metric}"] = np.nan
+        
+        # TwoStep error fallback
+        twostep_metrics = [
+            "accuracy", "acc_region_1", "acc_region_2", "acc_region_3", "acc_region_4",
+            "fnr_region_2", "f1_region_1", "f1_region_2", "f1_region_3", "f1_region_4",
+            "balanced_accuracy", "mcc", "n_leaves"
+        ]
+        for prefix in ["twostep_tuned", "twostep_fixed"]:
+            for metric in twostep_metrics:
+                result[f"{prefix}_{metric}"] = np.nan
+            result[f"{prefix}_cpu_time"] = np.nan
+            result[f"{prefix}_total_cpu_time"] = np.nan
+        result["twostep_causal_forest_cpu_time"] = np.nan
+    
+    finally:
+        # Release memory before worker picks up next task (CausalForests are memory-heavy)
+        gc.collect()
     
     return result
 
@@ -249,25 +305,20 @@ def run_lambda_comparison(
     
     if verbose:
         print("=" * 60)
-        print("LAMBDA COMPARISON - DIVERGENCE TREE COMPARISON")
+        print("LAMBDA + TWOSTEP COMPARISON")
         print("=" * 60)
         print(f"Number of simulations: {n_simulations}")
         print(f"Parallel jobs: {effective_n_jobs} (leaving 1 core free for system tasks)")
         print(f"Base random seed: {base_random_seed}")
         print(f"Batch size for incremental saving: {batch_size}")
-        print("\nMethods (8 total):")
-        print("  1. DivTree lambda=0")
-        print("  2. DivTree lambda=1, regions_of_interest=[2]")
-        print("  3. DivTree lambda=2, regions_of_interest=[2]")
-        print("  4. DivTree lambda=3, regions_of_interest=[2]")
-        print("  5. DivTree lambda=4, regions_of_interest=[2]")
-        print("  6. DivTree lambda=6, regions_of_interest=[2]")
-        print("  7. DivTree lambda=8, regions_of_interest=[2]")
-        print("  8. DivTree lambda=10, regions_of_interest=[2]")
-        print("\nNote: Generated data is saved for later use in method comparison.")
+        print("\nMethods:")
+        print("  DivTree: lambda=0, 1, 2, 4, 6, 8 (regions_of_interest=[2] for lambda>0)")
+        print("  TwoStep tuned: max_leaf_nodes tuned via Optuna")
+        print("  TwoStep fixed: max_leaf_nodes = n_leaves from DivTree lambda=2")
+        print("\nResults saved to aggregated/lambda_twostep_comparison")
     
     # Setup directories
-    aggregated_dir = os.path.join(base_dir, "aggregated", "lambda_comparison")
+    aggregated_dir = os.path.join(base_dir, "aggregated", "lambda_twostep_comparison")
     utils.safe_makedirs(aggregated_dir)
     results_file = os.path.join(aggregated_dir, "all_simulations_results.pkl")
     
@@ -312,6 +363,9 @@ def run_lambda_comparison(
             df.to_pickle(results_file)
             if verbose:
                 print(f"  Saved {len(all_results)}/{n_simulations} results to {results_file}")
+            
+            # Force garbage collection between batches to reduce memory (CausalForests are heavy)
+            gc.collect()
         
         except KeyboardInterrupt:
             if verbose:
@@ -334,13 +388,14 @@ def run_lambda_comparison(
 if __name__ == "__main__":
     base_dir = os.path.join(SCRIPT_DIR, "output")
     n_simulations = 10000
-    n_jobs = -1
+    # Reduce n_jobs if hitting memory limits (CausalForests use ~2 * n_estimators trees per simulation)
+    n_jobs = 20
     
     run_lambda_comparison(
         n_simulations=n_simulations,
         base_dir=base_dir,
         n_jobs=n_jobs,
         verbose=True,
-        batch_size=1000,
+        batch_size=100,
     )
 

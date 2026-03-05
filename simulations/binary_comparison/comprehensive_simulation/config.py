@@ -19,7 +19,7 @@ NOISE_MAX = 10.0
 # Data Size: number of training users (test will be half of this)
 # Logarithmic (log-uniform) distribution between DATA_SIZE_MIN and DATA_SIZE_MAX
 DATA_SIZE_MIN = 1000
-DATA_SIZE_MAX = 200000
+DATA_SIZE_MAX = 100000
 
 # Sparsity: k values (with n_categories = [60//k]*k to keep total features = 60)
 SPARSITY_VALUES = [1, 2, 3, 4, 5, 6]
@@ -48,6 +48,11 @@ DEFAULT_FIRM_OUTCOME_NOISE_STD = 1
 DEFAULT_USER_OUTCOME_NOISE_STD = 1
 DEFAULT_POSITIVE_RATIO = 0.5
 
+# ===================== TRAIN / VALIDATION / TEST SPLIT =====================
+TRAIN_FRAC = 0.5
+VAL_FRAC = 0.25
+TEST_FRAC = 0.25
+
 # ===================== DEFAULT NUMBER OF REPLICATIONS =====================
 DEFAULT_N_REPLICATIONS = 50
 
@@ -56,37 +61,31 @@ DEFAULT_N_REPLICATIONS = 50
 
 # DivergenceTree hyperparameters
 DIVTREE_FIXED_PARAMS = {
-    "lambda_": 1,
-    "n_quantiles": 2,
-    "co_movement": "both",
+    "n_quantiles": 20,
     "eps_scale": 1e-8,
 }
 
 DIVTREE_SEARCH_SPACE = {
-    "max_partitions": {"low": 2, "high": 100},
+    "max_partitions": {"low": 2, "high": 200},
     "min_improvement_ratio": {"low": 0.001, "high": 0.1, "log": True},
 }
 
 DIVTREE_N_TRIALS = 30
 DIVTREE_N_SPLITS = 2
 
-# TwoStepDivergenceTree classification tree tuning parameters
-TWOSTEP_CLASSIFICATION_TREE_TUNE_N_TRIALS = 30
-TWOSTEP_CLASSIFICATION_TREE_TUNE_N_SPLITS = 2
-
 # TwoStepDivergenceTree hyperparameters
 TWOSTEP_CAUSAL_FOREST_PARAMS = {
-    "n_jobs": 1,  # Set to 1 to avoid nested parallelization conflicts
+    "n_jobs": 1,  # Single-threaded for reproducible CPU-time measurement (works on Linux)
+    "n_estimators": 100,
+    "max_depth": 20,  # Limit tree depth to reduce memory (None = unbounded, can cause OOM)
+    "min_samples_split": 10,
+    "min_samples_leaf": 5,
 }
 
-TWOSTEP_CAUSAL_FOREST_TUNE_PARAMS = {
-    "params": "auto",  # Use econml's default tuning grid
-}
+TWOSTEP_CLASSIFICATION_TUNE_MAX_LEAF_NODES = {"low": 2, "high": 200}
 
-TWOSTEP_CLASSIFICATION_TREE_PARAMS = {}
-
-TWOSTEP_AUTO_TUNE_CLASSIFICATION_TREE = True
-
+TWOSTEP_CLASSIFICATION_TUNE_N_TRIALS = 30
+TWOSTEP_CLASSIFICATION_TUNE_N_SPLITS = 5
 
 
 # ===================== BASE RANDOM SEED =====================

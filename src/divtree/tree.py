@@ -117,7 +117,7 @@ class DivergenceTree:
 
     def __init__(
         self,
-        lambda_: float = 1.0,
+        lambda_: float = 2.0,
         max_partitions: int = 8,
         min_improvement_ratio: float = 0.01,
         n_quantiles: int = 32,
