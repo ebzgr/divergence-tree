@@ -520,7 +520,9 @@ class TwoStepDivergenceTree:
         scoring : str, default="accuracy"
             Scoring function. Options:
             - "accuracy": Classification accuracy
-            - "fnr_region_1", "fnr_region_2", "fnr_region_3", "fnr_region_4": 
+            - "recall_region_1", "recall_region_2", "recall_region_3", "recall_region_4":
+              Recall for the specified region (TP / (TP + FN))
+            - "fnr_region_1", "fnr_region_2", "fnr_region_3", "fnr_region_4":
               False Negative Rate for the specified region
         n_splits : int, default=5
             Number of folds for cross-validation.
@@ -543,17 +545,28 @@ class TwoStepDivergenceTree:
         # Parse scoring function
         if scoring == "accuracy":
             compute_fnr = False
+            compute_recall = False
             target_region = None
-        elif scoring.startswith("fnr_region_"):
-            compute_fnr = True
+        elif scoring.startswith("recall_region_"):
+            compute_fnr = False
+            compute_recall = True
             try:
                 target_region = int(scoring.split("_")[-1])
                 if target_region not in [1, 2, 3, 4]:
                     raise ValueError(f"Invalid region: {target_region}. Must be 1, 2, 3, or 4.")
             except (ValueError, IndexError):
-                raise ValueError(f"Invalid scoring function: {scoring}. Expected 'accuracy' or 'fnr_region_X' where X is 1-4.")
+                raise ValueError(f"Invalid scoring function: {scoring}. Expected 'accuracy', 'recall_region_X', or 'fnr_region_X' where X is 1-4.")
+        elif scoring.startswith("fnr_region_"):
+            compute_fnr = True
+            compute_recall = False
+            try:
+                target_region = int(scoring.split("_")[-1])
+                if target_region not in [1, 2, 3, 4]:
+                    raise ValueError(f"Invalid region: {target_region}. Must be 1, 2, 3, or 4.")
+            except (ValueError, IndexError):
+                raise ValueError(f"Invalid scoring function: {scoring}. Expected 'accuracy', 'recall_region_X', or 'fnr_region_X' where X is 1-4.")
         else:
-            raise ValueError(f"Invalid scoring function: {scoring}. Expected 'accuracy' or 'fnr_region_X' where X is 1-4.")
+            raise ValueError(f"Invalid scoring function: {scoring}. Expected 'accuracy', 'recall_region_X', or 'fnr_region_X' where X is 1-4.")
 
         kf = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
         scores = []
@@ -574,6 +587,16 @@ class TwoStepDivergenceTree:
                     else:
                         # No samples of target region in validation fold, use 0.0 (perfect FNR)
                         scores.append(0.0)
+                elif compute_recall:
+                    # Compute Recall for target region: TP / (TP + FN)
+                    true_region_mask = region_types[val_idx] == target_region
+                    if true_region_mask.sum() > 0:
+                        tp = ((pred == target_region) & true_region_mask).sum()
+                        fn = ((pred != target_region) & true_region_mask).sum()
+                        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+                        scores.append(recall)
+                    else:
+                        scores.append(0.0)
                 else:
                     # Compute accuracy
                     acc = accuracy_score(region_types[val_idx], pred)
@@ -582,6 +605,8 @@ class TwoStepDivergenceTree:
                 # On error, use worst possible score
                 if compute_fnr:
                     scores.append(1.0)  # Worst FNR
+                elif compute_recall:
+                    scores.append(0.0)  # Worst recall
                 else:
                     scores.append(0.0)  # Worst accuracy
 
@@ -623,7 +648,9 @@ class TwoStepDivergenceTree:
         scoring : str, default="accuracy"
             Scoring function. Options:
             - "accuracy": Classification accuracy (maximize)
-            - "fnr_region_1", "fnr_region_2", "fnr_region_3", "fnr_region_4": 
+            - "recall_region_1", "recall_region_2", "recall_region_3", "recall_region_4":
+              Recall for the specified region (maximize)
+            - "fnr_region_1", "fnr_region_2", "fnr_region_3", "fnr_region_4":
               False Negative Rate for the specified region (minimize)
         tune_max_leaf_nodes : bool, default=False
             If True, include max_leaf_nodes in the search space.
@@ -731,12 +758,12 @@ class TwoStepDivergenceTree:
             score = self._region_type_cv_score(
                 X, region_types, params, scoring=scoring, n_splits=n_splits, random_state=random_state
             )
-            # Return worst possible score on error (0.0 for accuracy, 1.0 for FNR which becomes -1.0)
+            # Return worst possible score on error (0.0 for accuracy/recall, -1.0 for FNR)
             if not np.isfinite(score):
-                if scoring == "accuracy":
-                    return 0.0
-                else:
+                if scoring.startswith("fnr_region_"):
                     return -1.0
+                else:
+                    return 0.0
             return score
 
         sampler = optuna.samplers.TPESampler(seed=random_state)

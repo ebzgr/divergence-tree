@@ -336,6 +336,38 @@ class DivergenceTree:
         # Categorize into region types
         return self._categorize_region_types(tauF_pred, tauC_pred)
 
+    def predict_treatment_effects(self, X: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Predict treatment effects (tauF, tauC) for new observations.
+
+        Each observation is assigned to a leaf; the leaf's effect estimates
+        are returned. Useful for aggregation across trees (e.g. in a forest).
+
+        Parameters
+        ----------
+        X : np.ndarray of shape (n_samples, n_features)
+            Feature matrix.
+
+        Returns
+        -------
+        tauF : np.ndarray of shape (n_samples,)
+            Predicted treatment effects for firm outcome.
+        tauC : np.ndarray of shape (n_samples,)
+            Predicted treatment effects for consumer outcome.
+        """
+        if self.root_ is None:
+            raise ValueError("Model has not been fitted. Call fit() first.")
+
+        X = np.asarray(X)
+        leaves_val = self.predict_leaf(X)
+        tauF_pred = np.array(
+            [leaf.tauF if leaf.tauF is not None else 0.0 for leaf in leaves_val]
+        )
+        tauC_pred = np.array(
+            [leaf.tauC if leaf.tauC is not None else 0.0 for leaf in leaves_val]
+        )
+        return tauF_pred, tauC_pred
+
     def _categorize_region_types(
         self, tauF: np.ndarray, tauC: np.ndarray
     ) -> np.ndarray:

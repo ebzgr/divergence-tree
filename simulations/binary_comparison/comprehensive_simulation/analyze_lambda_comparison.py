@@ -159,7 +159,10 @@ def create_lambda_comparison_plots(
         (6, "divtree_lambda6_region2", "DivTree λ=6"),
         (8, "divtree_lambda8_region2", "DivTree λ=8"),
         (None, "twostep_tuned", "TwoStep (tuned)"),
-        (None, "twostep_fixed", "TwoStep (fixed)"),
+        (None, "twostep_recall", "TwoStep (recall)"),
+        (None, "twostep_cap110", "TwoStep (cap110)"),
+        (None, "twostep_cap150", "TwoStep (cap150)"),
+        (None, "divtree_forest", "DivTreeForest"),
     ]
     
     # Default metrics to plot if not specified
@@ -200,7 +203,14 @@ def create_lambda_comparison_plots(
         
         for _, prefix, label in method_configs:
             # TwoStep total CPU time = CausalForest + classification tree (for fair comparison)
-            if metric == "cpu_time" and prefix in ("twostep_tuned", "twostep_fixed"):
+            if metric == "cpu_time" and prefix == "divtree_forest":
+                metric_col = "divtree_forest_cpu_time"
+                if metric_col in df.columns:
+                    values = df[metric_col].dropna().values
+                else:
+                    print(f"  Warning: Column {metric_col} not found, skipping DivTreeForest")
+                    continue
+            elif metric == "cpu_time" and prefix in ("twostep_tuned", "twostep_recall", "twostep_cap110", "twostep_cap150"):
                 total_col = f"{prefix}_total_cpu_time"
                 if total_col in df.columns:
                     values = df[total_col].dropna().values
@@ -243,7 +253,7 @@ def create_lambda_comparison_plots(
         means = [d["mean"] for d in method_data]
         stds = [d["std"] for d in method_data]
         
-        colors = ["#2e86ab"] * 6 + ["#e94f37", "#44af69"]  # DivTree blue, TwoStep tuned red, fixed green
+        colors = ["#2e86ab"] * 6 + ["#e94f37", "#44af69", "#8b4513", "#808080", "#0d7377"]  # DivTree blue; TwoStep x4; DivTreeForest
         bars = ax.bar(x, means, yerr=stds, capsize=4, color=colors, alpha=0.8, edgecolor="black", linewidth=0.5)
         
         ax.set_xlabel("Method", fontsize=12, fontweight="bold")
@@ -309,7 +319,10 @@ def create_summary_table(
         (6, "divtree_lambda6_region2", "DivTree λ=6"),
         (8, "divtree_lambda8_region2", "DivTree λ=8"),
         (None, "twostep_tuned", "TwoStep tuned"),
-        (None, "twostep_fixed", "TwoStep fixed"),
+        (None, "twostep_recall", "TwoStep recall"),
+        (None, "twostep_cap110", "TwoStep cap110"),
+        (None, "twostep_cap150", "TwoStep cap150"),
+        (None, "divtree_forest", "DivTreeForest"),
     ]
     
     if metrics is None:
@@ -341,7 +354,9 @@ def create_summary_table(
         row = {"Metric": metric_labels.get(metric, metric)}
         
         for _, prefix, label in method_configs:
-            if metric == "cpu_time" and prefix in ("twostep_tuned", "twostep_fixed"):
+            if metric == "cpu_time" and prefix == "divtree_forest":
+                metric_col = "divtree_forest_cpu_time"
+            elif metric == "cpu_time" and prefix in ("twostep_tuned", "twostep_recall", "twostep_cap110", "twostep_cap150"):
                 metric_col = f"{prefix}_total_cpu_time"
             else:
                 metric_col = f"{prefix}_{metric}"
@@ -396,13 +411,15 @@ def create_factor_comparison_plots(
     """
     utils.safe_makedirs(output_dir)
     
-    # Method prefixes: DivTree + TwoStep
+    # Method prefixes: DivTree + TwoStep (no DivTreeForest while it is commented out in simulation)
     method_configs = [
         ("divtree_lambda0", "λ=0", "blue", "o"),
         ("divtree_lambda2_region2", "λ=2", "red", "s"),
         ("divtree_lambda4_region2", "λ=4", "green", "^"),
         ("twostep_tuned", "TwoStep (tuned)", "purple", "D"),
-        ("twostep_fixed", "TwoStep (fixed)", "orange", "v"),
+        ("twostep_recall", "TwoStep (recall)", "orange", "v"),
+        ("twostep_cap110", "TwoStep (cap110)", "brown", "p"),
+        ("twostep_cap150", "TwoStep (cap150)", "gray", "h"),
     ]
     
     # Metrics to plot

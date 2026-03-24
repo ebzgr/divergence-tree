@@ -1,12 +1,14 @@
 """
 Lambda and TwoStep comparison simulation.
 
-Compares DivTree with lambda values 0, 1, 2, 4, 6, 8 and TwoStep with two variants:
-- TwoStep tuned: classification tree with max_leaf_nodes tuned via Optuna
-- TwoStep fixed: classification tree with max_leaf_nodes = n_leaves from DivTree lambda=2
+Compares DivTree with lambda values 0, 1, 2, 4, 6, 8 and TwoStep with four variants:
+- TwoStep tuned: classification tree tuned on accuracy (max_leaf_nodes tuned)
+- TwoStep recall: classification tree tuned on recall of region 2
+- TwoStep cap110: max_leaf_nodes = ceil(1.1 * n_leaves from DivTree lambda=0)
+- TwoStep cap150: max_leaf_nodes = ceil(1.5 * n_leaves from DivTree lambda=0)
 
-CausalForests are fit once per simulation and reused for both TwoStep variants.
-Results are saved to aggregated/lambda_twostep_comparison (separate from lambda_comparison).
+CausalForests are fit once per simulation and reused for all TwoStep variants.
+Results are saved to aggregated/lambda_twostep_comparison.
 """
 
 import os
@@ -23,6 +25,7 @@ from simulation_base import (
     generate_data_with_params,
     run_divtree_method,
     run_twostep_method,
+    # run_divtree_forest_method,  # Commented out for now; add back later
     run_single_task_with_retry,
 )
 
@@ -46,7 +49,7 @@ def run_single_lambda_simulation(
     verbose: bool = False,
 ) -> Dict[str, Any]:
     """
-    Run a single random simulation with DivTree (lambda 0,1,2,4,6,8) and TwoStep (tuned, fixed).
+    Run a single random simulation with DivTree (lambda 0,1,2,4,6,8) and TwoStep (tuned, recall, cap110, cap150).
     
     Parameters
     ----------
@@ -156,7 +159,7 @@ def run_single_lambda_simulation(
         
         # Run all lambda methods
         method_results = []
-        n_leaves_divtree2 = 4  # default fallback
+        n_leaves_divtree0 = 4  # default fallback for TwoStep cap110/cap150
         for lambda_val in lambda_values:
             method_result = run_divtree_method(
                 X_train, T_train, YF_train, YC_train,
@@ -168,10 +171,10 @@ def run_single_lambda_simulation(
                 verbose=False,
             )
             method_results.append((lambda_val, method_result))
-            if lambda_val == 2:
+            if lambda_val == 0:
                 n_leaves = method_result.get("n_leaves")
                 if n_leaves is not None and np.isfinite(n_leaves):
-                    n_leaves_divtree2 = max(2, int(n_leaves))
+                    n_leaves_divtree0 = max(2, int(n_leaves))
             
             # Store results with appropriate prefix
             if lambda_val == 0:
@@ -183,20 +186,39 @@ def run_single_lambda_simulation(
                 if k not in ["region_type_pred_train", "region_type_pred_test"]:
                     result[f"{prefix}_{k}"] = v
         
-        # Run TwoStep (CausalForests once, two classification tree variants)
+        # Run TwoStep (CausalForests once, four classification tree variants)
         twostep_result = run_twostep_method(
             X_train, T_train, YF_train, YC_train,
             X_val, T_val, YF_val, YC_val,
             X_test, region_type_test,
-            n_leaves_divtree2=n_leaves_divtree2,
+            n_leaves_divtree0=n_leaves_divtree0,
             random_seed=random_seed,
             verbose=False,
         )
+        pred_keys_to_skip = [
+            "twostep_tuned_region_type_pred_train", "twostep_tuned_region_type_pred_test",
+            "twostep_recall_region_type_pred_train", "twostep_recall_region_type_pred_test",
+            "twostep_cap110_region_type_pred_train", "twostep_cap110_region_type_pred_test",
+            "twostep_cap150_region_type_pred_train", "twostep_cap150_region_type_pred_test",
+        ]
         for k, v in twostep_result.items():
-            if k not in ["twostep_tuned_region_type_pred_train", "twostep_tuned_region_type_pred_test",
-                         "twostep_fixed_region_type_pred_train", "twostep_fixed_region_type_pred_test"]:
+            if k not in pred_keys_to_skip:
                 result[k] = v
-        
+
+        # DivTreeForest commented out for now; add back later.
+        # forest_result = run_divtree_forest_method(
+        #     X_train, T_train, YF_train, YC_train,
+        #     X_val, T_val, YF_val, YC_val,
+        #     X_test, region_type_test,
+        #     lambda_=config.DIVTREE_FOREST_LAMBDA,
+        #     n_estimators=config.DIVTREE_FOREST_N_ESTIMATORS,
+        #     random_seed=random_seed,
+        #     verbose=False,
+        # )
+        # for k, v in forest_result.items():
+        #     if k not in ["divtree_forest_region_type_pred_train", "divtree_forest_region_type_pred_test"]:
+        #         result[k] = v
+
         # Update DataFrames with predictions and save
         for lambda_val, method_result in method_results:
             if lambda_val == 0:
@@ -218,13 +240,19 @@ def run_single_lambda_simulation(
                 test_df[col_name] = np.nan
         
         # Add TwoStep predictions to DataFrames
-        for prefix in ["twostep_tuned", "twostep_fixed"]:
+        for prefix in ["twostep_tuned", "twostep_recall", "twostep_cap110", "twostep_cap150"]:
             pred_train = twostep_result.get(f"{prefix}_region_type_pred_train")
             pred_test = twostep_result.get(f"{prefix}_region_type_pred_test")
             col_name = f"{prefix}_region_pred"
             train_df[col_name] = pred_train if pred_train is not None else np.nan
             test_df[col_name] = pred_test if pred_test is not None else np.nan
-        
+
+        # DivTreeForest commented out for now.
+        # pred_train = forest_result.get("divtree_forest_region_type_pred_train")
+        # pred_test = forest_result.get("divtree_forest_region_type_pred_test")
+        # train_df["divtree_forest_region_pred"] = pred_train if pred_train is not None else np.nan
+        # test_df["divtree_forest_region_pred"] = pred_test if pred_test is not None else np.nan
+
         # Save updated DataFrames
         train_df.to_pickle(train_data_file)
         test_df.to_pickle(test_data_file)
@@ -251,13 +279,18 @@ def run_single_lambda_simulation(
             "fnr_region_2", "f1_region_1", "f1_region_2", "f1_region_3", "f1_region_4",
             "balanced_accuracy", "mcc", "n_leaves"
         ]
-        for prefix in ["twostep_tuned", "twostep_fixed"]:
+        for prefix in ["twostep_tuned", "twostep_recall", "twostep_cap110", "twostep_cap150"]:
             for metric in twostep_metrics:
                 result[f"{prefix}_{metric}"] = np.nan
             result[f"{prefix}_cpu_time"] = np.nan
             result[f"{prefix}_total_cpu_time"] = np.nan
         result["twostep_causal_forest_cpu_time"] = np.nan
-    
+
+        # DivTreeForest commented out for now.
+        # for metric in twostep_metrics:
+        #     result[f"divtree_forest_{metric}"] = np.nan
+        # result["divtree_forest_cpu_time"] = np.nan
+
     finally:
         # Release memory before worker picks up next task (CausalForests are memory-heavy)
         gc.collect()
@@ -278,7 +311,8 @@ def run_lambda_comparison(
     batch_size: int = 1000,
 ) -> None:
     """
-    Run lambda comparison simulation: Compare DivTree with lambda values 0, 1, 2, 3, 4, 6, 8, 10.
+    Run lambda comparison simulation: Compare DivTree with lambda values 0, 1, 2, 4, 6, 8
+    and TwoStep (tuned, recall, cap110, cap150). DivTreeForest is currently disabled.
     
     Parameters
     ----------
@@ -313,8 +347,10 @@ def run_lambda_comparison(
         print(f"Batch size for incremental saving: {batch_size}")
         print("\nMethods:")
         print("  DivTree: lambda=0, 1, 2, 4, 6, 8 (regions_of_interest=[2] for lambda>0)")
-        print("  TwoStep tuned: max_leaf_nodes tuned via Optuna")
-        print("  TwoStep fixed: max_leaf_nodes = n_leaves from DivTree lambda=2")
+        print("  TwoStep tuned: tuned on accuracy")
+        print("  TwoStep recall: tuned on recall of region 2")
+        print("  TwoStep cap110/cap150: leaf cap 1.1x/1.5x DivTree lambda=0")
+        print("  (DivTreeForest is commented out for now)")
         print("\nResults saved to aggregated/lambda_twostep_comparison")
     
     # Setup directories

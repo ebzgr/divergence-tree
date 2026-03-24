@@ -39,6 +39,7 @@ from binary_data_generator import generate_binary_comparison_data
 
 sys.path.append(os.path.join(PROJECT_ROOT, "src"))
 from divtree.tree import DivergenceTree
+from divtree.forest import DivTreeForest
 from divtree.tune import tune_with_optuna_holdout
 from twostepdivtree.tree import TwoStepDivergenceTree
 
@@ -100,7 +101,7 @@ def generate_data_with_params(
     np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray,
     Dict[str, Any],
 ]:
-    """Generate data with train/validation/test split (60/20/20)."""
+    """Generate data with train/validation/test split (50/25/25 per config)."""
     n_categories = [60 // sparsity] * sparsity
     n_users_total = n_users_train + n_users_test
     
@@ -303,16 +304,18 @@ def run_twostep_method(
     YC_val: np.ndarray,
     X_test: np.ndarray,
     region_type_test: np.ndarray,
-    n_leaves_divtree2: int,
+    n_leaves_divtree0: int,
     random_seed: int,
     verbose: bool = False,
 ) -> Dict[str, Any]:
     """
-    Run TwoStepDivergenceTree with two variants: tuned max_leaf_nodes and fixed max_leaf_nodes.
+    Run TwoStepDivergenceTree with four variants.
 
-    Fits CausalForests once on train+val, then fits two classification trees:
-    - Variant A (tuned): max_leaf_nodes tuned via Optuna
-    - Variant B (fixed): max_leaf_nodes = n_leaves_divtree2
+    Fits CausalForests once on train+val, then fits four classification trees:
+    - twostep_tuned: tuned max_leaf_nodes, optimized on accuracy
+    - twostep_recall: tuned max_leaf_nodes, optimized on recall of region 2
+    - twostep_cap110: max_leaf_nodes = ceil(1.1 * n_leaves_divtree0)
+    - twostep_cap150: max_leaf_nodes = ceil(1.5 * n_leaves_divtree0)
 
     Parameters
     ----------
@@ -324,8 +327,8 @@ def run_twostep_method(
         Test feature matrix.
     region_type_test : np.ndarray
         True region types for test set.
-    n_leaves_divtree2 : int
-        Number of leaves from DivTree with lambda=2 (for variant B).
+    n_leaves_divtree0 : int
+        Number of leaves from DivTree with lambda=0 (for cap110/cap150).
     random_seed : int
         Random seed for reproducibility.
     verbose : bool, default=False
@@ -334,7 +337,7 @@ def run_twostep_method(
     Returns
     -------
     dict
-        Dictionary with twostep_tuned_*, twostep_fixed_* metrics and CPU times.
+        Dictionary with twostep_tuned_*, twostep_recall_*, twostep_cap110_*, twostep_cap150_* metrics and CPU times.
     """
     result = {}
     try:
@@ -355,7 +358,8 @@ def run_twostep_method(
             causal_forest_tune_params={},
         )
 
-        # Step 1: Fit CausalForests only (no classification tree; we fit it separately below)
+        # Step 1: Fit CausalForests once. All four variants share this single first-step run
+        # (tauF, tauC, region_types); only the second-step classification tree differs below.
         cpu_cf_start = get_cpu_time()
         twostep.fit(
             X_trainval, T_trainval, YF_trainval, YC_trainval,
@@ -365,78 +369,249 @@ def run_twostep_method(
         )
         cpu_causal_forest = get_cpu_time() - cpu_cf_start
 
-        # Step 2a: Variant A - tune classification tree (including max_leaf_nodes)
+        # Step 2a: twostep_tuned - tune classification tree (accuracy, max_leaf_nodes)
         cpu_tuned_start = get_cpu_time()
         twostep._fit_classification_tree_step(
             X_trainval,
             auto_tune_classification_tree=True,
             classification_tree_tune_n_trials=config.TWOSTEP_CLASSIFICATION_TUNE_N_TRIALS,
             classification_tree_tune_n_splits=config.TWOSTEP_CLASSIFICATION_TUNE_N_SPLITS,
+            classification_tree_scoring="accuracy",
             tune_max_leaf_nodes=True,
             max_leaf_nodes_search_space=config.TWOSTEP_CLASSIFICATION_TUNE_MAX_LEAF_NODES,
             verbose=verbose,
         )
         pred_tuned_test = twostep.predict_region_type(X_test)
         pred_tuned_train = twostep.predict_region_type(X_train)
-        tree = twostep.classification_tree_.tree_
-        n_leaves_tuned = int((tree.children_left == -1).sum())
+        n_leaves_tuned = int((twostep.classification_tree_.tree_.children_left == -1).sum())
         cpu_tuned = get_cpu_time() - cpu_tuned_start
-
         metrics_tuned = compute_all_metrics(region_type_test, pred_tuned_test, method_name="")
 
-        # Step 2b: Variant B - fixed max_leaf_nodes = n_leaves_divtree2
-        cpu_fixed_start = get_cpu_time()
+        # Step 2b: twostep_recall - tune classification tree (recall_region_2, max_leaf_nodes)
+        cpu_recall_start = get_cpu_time()
+        twostep._fit_classification_tree_step(
+            X_trainval,
+            auto_tune_classification_tree=True,
+            classification_tree_tune_n_trials=config.TWOSTEP_CLASSIFICATION_TUNE_N_TRIALS,
+            classification_tree_tune_n_splits=config.TWOSTEP_CLASSIFICATION_TUNE_N_SPLITS,
+            classification_tree_scoring="recall_region_2",
+            tune_max_leaf_nodes=True,
+            max_leaf_nodes_search_space=config.TWOSTEP_CLASSIFICATION_TUNE_MAX_LEAF_NODES,
+            verbose=verbose,
+        )
+        pred_recall_test = twostep.predict_region_type(X_test)
+        pred_recall_train = twostep.predict_region_type(X_train)
+        n_leaves_recall = int((twostep.classification_tree_.tree_.children_left == -1).sum())
+        cpu_recall = get_cpu_time() - cpu_recall_start
+        metrics_recall = compute_all_metrics(region_type_test, pred_recall_test, method_name="")
+
+        # Step 2c: twostep_cap110 - fixed max_leaf_nodes = ceil(1.1 * n_leaves_divtree0)
+        max_leaf_cap110 = max(2, int(np.ceil(1.1 * n_leaves_divtree0)))
+        cpu_cap110_start = get_cpu_time()
         twostep._fit_classification_tree_step(
             X_trainval,
             auto_tune_classification_tree=False,
-            max_leaf_nodes=n_leaves_divtree2,
+            max_leaf_nodes=max_leaf_cap110,
             verbose=verbose,
         )
-        pred_fixed_test = twostep.predict_region_type(X_test)
-        pred_fixed_train = twostep.predict_region_type(X_train)
-        n_leaves_fixed = int((twostep.classification_tree_.tree_.children_left == -1).sum())
-        cpu_fixed = get_cpu_time() - cpu_fixed_start
+        pred_cap110_test = twostep.predict_region_type(X_test)
+        pred_cap110_train = twostep.predict_region_type(X_train)
+        n_leaves_cap110 = int((twostep.classification_tree_.tree_.children_left == -1).sum())
+        cpu_cap110 = get_cpu_time() - cpu_cap110_start
+        metrics_cap110 = compute_all_metrics(region_type_test, pred_cap110_test, method_name="")
 
-        metrics_fixed = compute_all_metrics(region_type_test, pred_fixed_test, method_name="")
+        # Step 2d: twostep_cap150 - fixed max_leaf_nodes = ceil(1.5 * n_leaves_divtree0)
+        max_leaf_cap150 = max(2, int(np.ceil(1.5 * n_leaves_divtree0)))
+        cpu_cap150_start = get_cpu_time()
+        twostep._fit_classification_tree_step(
+            X_trainval,
+            auto_tune_classification_tree=False,
+            max_leaf_nodes=max_leaf_cap150,
+            verbose=verbose,
+        )
+        pred_cap150_test = twostep.predict_region_type(X_test)
+        pred_cap150_train = twostep.predict_region_type(X_train)
+        n_leaves_cap150 = int((twostep.classification_tree_.tree_.children_left == -1).sum())
+        cpu_cap150 = get_cpu_time() - cpu_cap150_start
+        metrics_cap150 = compute_all_metrics(region_type_test, pred_cap150_test, method_name="")
 
         result = {
             "twostep_tuned_region_type_pred_train": pred_tuned_train,
             "twostep_tuned_region_type_pred_test": pred_tuned_test,
-            "twostep_fixed_region_type_pred_train": pred_fixed_train,
-            "twostep_fixed_region_type_pred_test": pred_fixed_test,
+            "twostep_recall_region_type_pred_train": pred_recall_train,
+            "twostep_recall_region_type_pred_test": pred_recall_test,
+            "twostep_cap110_region_type_pred_train": pred_cap110_train,
+            "twostep_cap110_region_type_pred_test": pred_cap110_test,
+            "twostep_cap150_region_type_pred_train": pred_cap150_train,
+            "twostep_cap150_region_type_pred_test": pred_cap150_test,
             "twostep_tuned_n_leaves": n_leaves_tuned,
-            "twostep_fixed_n_leaves": n_leaves_fixed,
+            "twostep_recall_n_leaves": n_leaves_recall,
+            "twostep_cap110_n_leaves": n_leaves_cap110,
+            "twostep_cap150_n_leaves": n_leaves_cap150,
             "twostep_causal_forest_cpu_time": cpu_causal_forest,
             "twostep_tuned_cpu_time": cpu_tuned,
-            "twostep_fixed_cpu_time": cpu_fixed,
-            # Total CPU time = CausalForest + classification tree (for fair comparison with DivTree)
+            "twostep_recall_cpu_time": cpu_recall,
+            "twostep_cap110_cpu_time": cpu_cap110,
+            "twostep_cap150_cpu_time": cpu_cap150,
             "twostep_tuned_total_cpu_time": cpu_causal_forest + cpu_tuned,
-            "twostep_fixed_total_cpu_time": cpu_causal_forest + cpu_fixed,
+            "twostep_recall_total_cpu_time": cpu_causal_forest + cpu_recall,
+            "twostep_cap110_total_cpu_time": cpu_causal_forest + cpu_cap110,
+            "twostep_cap150_total_cpu_time": cpu_causal_forest + cpu_cap150,
         }
         for k, v in metrics_tuned.items():
             result[f"twostep_tuned_{k}"] = v
-        for k, v in metrics_fixed.items():
-            result[f"twostep_fixed_{k}"] = v
+        for k, v in metrics_recall.items():
+            result[f"twostep_recall_{k}"] = v
+        for k, v in metrics_cap110.items():
+            result[f"twostep_cap110_{k}"] = v
+        for k, v in metrics_cap150.items():
+            result[f"twostep_cap150_{k}"] = v
 
     except Exception:
         result = {
             "twostep_tuned_region_type_pred_train": None,
             "twostep_tuned_region_type_pred_test": None,
-            "twostep_fixed_region_type_pred_train": None,
-            "twostep_fixed_region_type_pred_test": None,
+            "twostep_recall_region_type_pred_train": None,
+            "twostep_recall_region_type_pred_test": None,
+            "twostep_cap110_region_type_pred_train": None,
+            "twostep_cap110_region_type_pred_test": None,
+            "twostep_cap150_region_type_pred_train": None,
+            "twostep_cap150_region_type_pred_test": None,
             "twostep_tuned_n_leaves": np.nan,
-            "twostep_fixed_n_leaves": np.nan,
+            "twostep_recall_n_leaves": np.nan,
+            "twostep_cap110_n_leaves": np.nan,
+            "twostep_cap150_n_leaves": np.nan,
             "twostep_causal_forest_cpu_time": np.nan,
             "twostep_tuned_cpu_time": np.nan,
-            "twostep_fixed_cpu_time": np.nan,
+            "twostep_recall_cpu_time": np.nan,
+            "twostep_cap110_cpu_time": np.nan,
+            "twostep_cap150_cpu_time": np.nan,
             "twostep_tuned_total_cpu_time": np.nan,
-            "twostep_fixed_total_cpu_time": np.nan,
+            "twostep_recall_total_cpu_time": np.nan,
+            "twostep_cap110_total_cpu_time": np.nan,
+            "twostep_cap150_total_cpu_time": np.nan,
         }
-        for prefix in ["twostep_tuned", "twostep_fixed"]:
+        for prefix in ["twostep_tuned", "twostep_recall", "twostep_cap110", "twostep_cap150"]:
             for metric in ["accuracy", "acc_region_1", "acc_region_2", "acc_region_3", "acc_region_4",
                           "fnr_region_2", "f1_region_1", "f1_region_2", "f1_region_3", "f1_region_4",
                           "balanced_accuracy", "mcc"]:
                 result[f"{prefix}_{metric}"] = np.nan
+
+    return result
+
+
+def run_divtree_forest_method(
+    X_train: np.ndarray,
+    T_train: np.ndarray,
+    YF_train: np.ndarray,
+    YC_train: np.ndarray,
+    X_val: np.ndarray,
+    T_val: np.ndarray,
+    YF_val: np.ndarray,
+    YC_val: np.ndarray,
+    X_test: np.ndarray,
+    region_type_test: np.ndarray,
+    lambda_: float,
+    n_estimators: int,
+    random_seed: int,
+    verbose: bool = False,
+) -> Dict[str, Any]:
+    """
+    Run DivTreeForest (bagging of DivTree + classification tree).
+
+    Tunes DivTree hyperparameters once, then fits a forest with those params.
+    Simulation uses lambda=2, n_estimators=50 by default (from config).
+
+    Parameters
+    ----------
+    X_train, T_train, YF_train, YC_train : np.ndarray
+        Training data.
+    X_val, T_val, YF_val, YC_val : np.ndarray
+        Validation data (for tuning base DivTree params).
+    X_test : np.ndarray
+        Test feature matrix.
+    region_type_test : np.ndarray
+        True region types for test set.
+    lambda_ : float
+        Lambda for each DivTree in the forest.
+    n_estimators : int
+        Number of trees in the forest.
+    random_seed : int
+        Random seed.
+    verbose : bool, default=False
+        Whether to print progress.
+
+    Returns
+    -------
+    dict
+        Dictionary with divtree_forest_* metrics and CPU time.
+    """
+    result = {}
+    try:
+        X_trainval = np.concatenate([X_train, X_val], axis=0)
+        T_trainval = np.concatenate([T_train, T_val], axis=0)
+        YF_trainval = np.concatenate([YF_train, YF_val], axis=0)
+        YC_trainval = np.concatenate([YC_train, YC_val], axis=0)
+
+        fixed_params = {
+            "lambda_": lambda_,
+            "n_quantiles": config.DIVTREE_FIXED_PARAMS.get("n_quantiles", 20),
+            "eps_scale": config.DIVTREE_FIXED_PARAMS.get("eps_scale", 1e-8),
+            "random_state": random_seed,
+            "regions_of_interest": [2],
+        }
+        best_params, _ = tune_with_optuna_holdout(
+            X_train, T_train, YF_train, YC_train,
+            X_val, T_val, YF_val, YC_val,
+            fixed=fixed_params,
+            search_space=config.DIVTREE_SEARCH_SPACE,
+            n_trials=config.DIVTREE_N_TRIALS,
+            random_state=random_seed,
+            verbose=verbose,
+        )
+        divtree_params = {
+            k: v for k, v in best_params.items()
+            if k in ("max_partitions", "min_improvement_ratio", "n_quantiles", "eps_scale")
+        }
+
+        cpu_start = get_cpu_time()
+        forest = DivTreeForest(
+            n_estimators=n_estimators,
+            lambda_=lambda_,
+            regions_of_interest=[2],
+            max_samples=config.DIVTREE_FOREST_MAX_SAMPLES,
+            max_features=config.DIVTREE_FOREST_MAX_FEATURES,
+            random_state=random_seed,
+            **divtree_params,
+        )
+        forest.fit(X_trainval, T_trainval, YF_trainval, YC_trainval)
+        cpu_time = get_cpu_time() - cpu_start
+
+        pred_train = forest.predict_region_type(X_train)
+        pred_test = forest.predict_region_type(X_test)
+        n_leaves = int((forest.classification_tree_.tree_.children_left == -1).sum())
+
+        metrics = compute_all_metrics(region_type_test, pred_test, method_name="")
+        result = {
+            "divtree_forest_region_type_pred_train": pred_train,
+            "divtree_forest_region_type_pred_test": pred_test,
+            "divtree_forest_n_leaves": n_leaves,
+            "divtree_forest_cpu_time": cpu_time,
+        }
+        for k, v in metrics.items():
+            result[f"divtree_forest_{k}"] = v
+
+    except Exception:
+        result = {
+            "divtree_forest_region_type_pred_train": None,
+            "divtree_forest_region_type_pred_test": None,
+            "divtree_forest_n_leaves": np.nan,
+            "divtree_forest_cpu_time": np.nan,
+        }
+        for metric in ["accuracy", "acc_region_1", "acc_region_2", "acc_region_3", "acc_region_4",
+                       "fnr_region_2", "f1_region_1", "f1_region_2", "f1_region_3", "f1_region_4",
+                       "balanced_accuracy", "mcc"]:
+            result[f"divtree_forest_{metric}"] = np.nan
 
     return result
 
