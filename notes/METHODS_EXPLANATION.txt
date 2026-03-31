@@ -1,0 +1,507 @@
+================================================================================
+DIVERGENCE TREE METHODS: TECHNICAL EXPLANATION
+================================================================================
+
+This document provides a detailed technical explanation of the two methods
+implemented in this package for identifying heterogeneous treatment effects
+on two outcomes simultaneously.
+
+================================================================================
+0. GOAL AND OBJECTIVES
+================================================================================
+
+0.1 Primary Goal
+----------------
+The goal of both divergence tree algorithms is to identify heterogeneous
+treatment effects on two outcomes simultaneously and segment populations
+into regions where treatment effects differ. Specifically, the algorithms
+aim to:
+
+1. Identify subpopulations with heterogeneous treatment effects on both
+   firm-side (YF) and consumer-side (YC) outcomes
+
+2. Discover regions where treatment effects align (both positive or both
+   negative) versus regions where they diverge (opposite signs)
+
+3. Provide interpretable, rule-based segmentation that can guide policy
+   decisions and intervention strategies
+
+4. Enable auditing of interventions to understand where they create win-win
+   scenarios, trade-offs, or lose-lose situations
+
+0.2 Problem Context
+-------------------
+In many real-world scenarios, interventions (treatments, policies, marketing
+campaigns) affect multiple stakeholders simultaneously:
+
+- Firm outcomes (YF): Business metrics like conversion, revenue, profit
+- Consumer outcomes (YC): Customer metrics like satisfaction, utility, welfare
+
+The treatment effect on firm outcomes (τF) and consumer outcomes (τC) may
+vary across different subpopulations defined by observable characteristics.
+Understanding this heterogeneity is crucial for:
+
+- Identifying where interventions benefit both parties (win-win)
+- Detecting trade-offs where one party gains at the other's expense
+- Avoiding interventions that harm both parties
+- Targeting interventions to specific subpopulations
+
+0.3 Objectives
+--------------
+Both algorithms aim to achieve the following objectives:
+
+1. Heterogeneity Detection:
+   - Identify subpopulations with different treatment effect patterns
+   - Segment based on observable features (X)
+
+2. Joint Effect Analysis:
+   - Consider both outcomes simultaneously, not separately
+   - Understand how effects on different outcomes relate to each other
+
+3. Interpretability:
+   - Provide rule-based segmentation (decision trees)
+   - Enable understanding of which features drive heterogeneity
+
+4. Region Type Classification:
+   - Categorize observations into 4 region types:
+     * Region 1: τF > 0, τC > 0 (win-win)
+     * Region 2: τF > 0, τC ≤ 0 (firm wins, consumer loses)
+     * Region 3: τF ≤ 0, τC > 0 (firm loses, consumer wins)
+     * Region 4: τF ≤ 0, τC ≤ 0 (lose-lose)
+
+5. Actionable Insights:
+   - Enable targeted policy interventions
+   - Support evidence-based decision making
+   - Facilitate ethical auditing of interventions
+
+0.4 Key Questions Addressed
+---------------------------
+The algorithms answer questions such as:
+
+- Which subpopulations benefit from the treatment on both outcomes?
+- Where do trade-offs occur between firm and consumer outcomes?
+- What observable characteristics predict heterogeneous effects?
+- Should the intervention be targeted to specific groups?
+- Are there ethical concerns where firm gains come at consumer expense?
+
+================================================================================
+1. DIVERGENCE TREE METHOD
+================================================================================
+
+1.1 Overview
+------------
+The DivergenceTree class implements a recursive partitioning algorithm that
+directly identifies regions with heterogeneous treatment effects on two
+outcomes: firm outcome (YF) and consumer outcome (YC). The algorithm grows
+a maximal tree and then prunes it based on an improvement ratio criterion.
+
+1.2 Algorithm Structure
+-----------------------
+The algorithm consists of two main phases:
+
+Phase 1: Growth Phase
+- Grows a maximal tree up to max_partitions leaves
+- Uses global split selection: at each iteration, considers all current
+  leaf partitions and selects the globally best split across all partitions
+- Split selection is based on an objective function that measures
+  heterogeneity in both outcomes and their co-movement
+
+Phase 2: Pruning Phase
+- Prunes the tree bottom-up
+- For each internal node, computes the improvement ratio
+- Removes splits with improvement_ratio below min_improvement_ratio
+- Continues until no more splits can be pruned
+
+1.3 Split Selection Objective Function
+--------------------------------------
+The algorithm uses a joint splitting criterion that considers heterogeneity
+in both firm-side (τF) and consumer-side (τC) treatment effects.
+
+The objective function is:
+    g(τF, τC) = zF² + zC² + λ * φ(zF * zC)
+
+where:
+    zF = (τF - τ̄F) / σF
+    zC = (τC - τ̄C) / σC
+
+    τ̄F, τ̄C = baseline treatment effects (computed at root)
+    σF, σC = scale parameters (standard deviations) computed at root
+    λ = co-movement weight parameter (lambda_)
+    φ = co-movement function that depends on the co_movement mode
+
+The three components:
+1. zF²: Measures heterogeneity in firm-side treatment effects
+2. zC²: Measures heterogeneity in consumer-side treatment effects
+3. λ * φ(zF * zC): Captures whether effects move together or apart
+
+Co-movement modes:
+- 'both': φ(d) = d (any alignment, positive or negative)
+- 'converge': φ(d) = max(0, d) (only positive alignment)
+- 'diverge': φ(d) = max(0, -d) (only opposite signs)
+
+For a split candidate that partitions data into left (L) and right (R) subsets,
+the total gain is:
+    gain = nL * g(τF_L, τC_L) + nR * g(τF_R, τC_R)
+
+where nL and nR are the sample sizes in each child node.
+
+1.4 Treatment Effect Estimation
+--------------------------------
+Treatment effects are estimated separately for each outcome type:
+
+For binary outcomes (detected as containing only 0 and 1):
+    τ = E[Y | T=1] - E[Y | T=0]
+
+For continuous outcomes:
+    τ = E[Y | T=1] - E[Y | T=0]
+
+The algorithm automatically detects outcome types by checking if values are
+only in {0, 1} (binary) or contain other numeric values (continuous).
+
+Missing values (NaN) are handled by:
+- Excluding NaN observations from effect estimation
+- Computing effects only on valid observations
+- Allowing leaves to have different sample sizes
+
+1.5 Scale Computation
+---------------------
+Scale parameters (σF, σC) are computed at the root level to normalize
+deviations in the objective function. The scale is computed as the standard
+deviation of treatment effects across the data, with a minimum value (eps_scale)
+to avoid division by zero.
+
+1.6 Global Split Selection
+---------------------------
+Unlike greedy top-down approaches, the algorithm uses global split selection:
+
+1. Maintains a list of all current leaf partitions
+2. For each partition, pre-computes the best split candidate
+3. Selects the partition with the globally best gain
+4. Applies that split and updates the partition list
+5. Repeats until max_partitions is reached or no good splits remain
+
+This approach ensures that splits are chosen based on global optimality rather
+than local greedy decisions.
+
+1.7 Split Candidate Generation
+------------------------------
+For each leaf partition, split candidates are generated by:
+1. Iterating over all features
+2. For continuous features: computing quantiles (n_quantiles) and using
+   unique quantile values as thresholds
+3. For binary/categorical features: using unique values as thresholds
+4. Evaluating each candidate using the objective function
+
+1.8 Pruning Mechanism
+--------------------
+The pruning phase uses an improvement ratio criterion:
+
+For each internal node:
+1. Compute total objective with the split (current state)
+2. Compute total objective without the split (treating the node as a leaf)
+3. Calculate improvement_ratio:
+   improvement_ratio = (objective_with_split - objective_without_split) 
+                       / objective_without_split
+4. If improvement_ratio < min_improvement_ratio, prune the split
+5. Continue recursively from leaves upward
+
+The pruning is done iteratively:
+- Collect all leaf parent nodes (nodes whose children are both leaves)
+- Find the node with smallest improvement_ratio
+- If it's below threshold, prune it
+- Repeat until no more splits can be pruned
+
+1.9 Region Type Classification
+------------------------------
+After training, observations are classified into 4 region types based on
+treatment effect signs:
+
+- Region 1: τF > 0 and τC > 0 (both positive - win-win)
+- Region 2: τF > 0 and τC ≤ 0 (firm positive, consumer negative - trade-off)
+- Region 3: τF ≤ 0 and τC > 0 (firm negative, consumer positive - trade-off)
+- Region 4: τF ≤ 0 and τC ≤ 0 (both negative - lose-lose)
+
+1.10 Hyperparameters
+---------------------
+- max_partitions: Maximum number of leaves to grow before pruning (default: 8)
+- min_improvement_ratio: Minimum improvement ratio to keep a split (default: 0.01)
+- lambda_: Weight for co-movement term (default: 1.0)
+- n_quantiles: Number of quantiles for continuous feature splits (default: 32)
+- co_movement: Mode for co-movement term - 'both', 'converge', or 'diverge' (default: 'both')
+- eps_scale: Minimum scale value to avoid division by zero (default: 1e-8)
+- random_state: Random seed for reproducibility
+
+1.11 Hyperparameter Tuning
+---------------------------
+Hyperparameter tuning uses Optuna with K-fold cross-validation. The evaluation
+metric is pseudo-outcome MSE loss, which combines firm and consumer outcome
+prediction errors using the pseudo-outcome approach from Wager & Athey (2018).
+
+The tuning process:
+1. Uses Optuna's TPE sampler for efficient hyperparameter search
+2. Performs K-fold cross-validation for each hyperparameter combination
+3. Evaluates using pseudo-outcome MSE loss
+4. Returns the best hyperparameters and corresponding loss
+
+Tuned hyperparameters:
+- max_partitions: Maximum number of leaves
+- min_improvement_ratio: Minimum improvement ratio for pruning
+
+================================================================================
+2. TWO-STEP DIVERGENCE TREE METHOD
+================================================================================
+
+2.1 Overview
+------------
+The TwoStepDivergenceTree class implements an alternative approach that uses
+causal forests to estimate treatment effects, then a classification tree to
+predict region types. This method separates the effect estimation step from
+the segmentation step.
+
+2.2 Algorithm Structure
+------------------------
+The algorithm consists of four main steps:
+
+Step 1: Fit Causal Forests
+- Fit separate causal forest models for firm outcome (YF) and consumer
+  outcome (YC) using econml.dml.CausalForestDML
+- Each causal forest is tuned using econml's built-in tune() method
+- Causal forests handle missing values (NaN) by only using valid observations
+
+Step 2: Estimate Treatment Effects
+- Use the fitted causal forests to predict treatment effects (τF, τC) for
+  all observations
+- This provides individual-level treatment effect estimates
+
+Step 3: Categorize Region Types
+- Categorize observations into 4 region types based on effect signs:
+  * Region 1: τF > 0 and τC > 0
+  * Region 2: τF > 0 and τC ≤ 0
+  * Region 3: τF ≤ 0 and τC > 0
+  * Region 4: τF ≤ 0 and τC ≤ 0
+
+Step 4: Train Classification Tree
+- Train a sklearn.tree.DecisionTreeClassifier to predict region types from
+  features
+- Optionally tune classification tree hyperparameters using Optuna
+- The classification tree learns rules to predict which region type an
+  observation belongs to based on its features
+
+2.3 Causal Forest Estimation
+-----------------------------
+Causal forests (CausalForestDML from econml) are used to estimate treatment
+effects. Causal forests:
+
+- Use random forests to estimate conditional average treatment effects (CATE)
+- Handle confounding by using double machine learning (DML)
+- Support parallelization via n_jobs parameter
+- Have built-in hyperparameter tuning via the tune() method
+
+The causal forest tuning:
+- Uses econml's built-in tune() method
+- Can use "auto" mode for automatic grid search
+- Or accept custom parameter grids
+- Tunes parameters like n_estimators, max_depth, min_samples_split, etc.
+
+Two separate causal forests are fitted:
+- causal_forest_F_: For firm outcome (YF)
+- causal_forest_C_: For consumer outcome (YC)
+
+Each forest is fitted only on observations with valid (non-NaN) outcomes.
+
+2.4 Treatment Effect Prediction
+--------------------------------
+After fitting the causal forests, treatment effects are predicted for all
+observations:
+
+    τF = causal_forest_F_.effect(X)
+    τC = causal_forest_C_.effect(X)
+
+These individual-level estimates are then used to categorize observations
+into region types.
+
+2.5 Region Type Categorization
+-------------------------------
+Observations are categorized into 4 region types based on the signs of
+predicted treatment effects:
+
+    if τF > 0 and τC > 0:
+        region_type = 1  # Win-win
+    elif τF > 0 and τC ≤ 0:
+        region_type = 2  # Firm wins, consumer loses
+    elif τF ≤ 0 and τC > 0:
+        region_type = 3  # Firm loses, consumer wins
+    else:  # τF ≤ 0 and τC ≤ 0
+        region_type = 4  # Lose-lose
+
+NaN values in treatment effects are treated as 0 (neutral).
+
+2.6 Classification Tree Training
+---------------------------------
+A classification tree (DecisionTreeClassifier from sklearn) is trained to
+predict region types from features. The classification tree:
+
+- Learns decision rules to predict region types (1-4) from features
+- Can be tuned using Optuna with K-fold cross-validation
+- Uses classification accuracy as the evaluation metric
+- Supports standard sklearn tree parameters (max_depth, min_samples_split,
+  min_samples_leaf, etc.)
+
+The classification tree tuning (if enabled):
+- Uses Optuna's TPE sampler
+- Performs K-fold cross-validation
+- Evaluates using classification accuracy
+- Tunes parameters like max_depth, min_samples_split, min_samples_leaf
+
+2.7 Hyperparameters
+-------------------
+Causal Forest Parameters:
+- n_estimators: Number of trees in the forest (default: 100)
+- max_depth: Maximum depth of trees (default: None)
+- min_samples_split: Minimum samples to split a node (default: 10)
+- min_samples_leaf: Minimum samples in a leaf (default: 5)
+- n_jobs: Number of parallel jobs (default: None, -1 for all CPUs)
+- random_state: Random seed
+
+Causal Forest Tuning Parameters:
+- params: "auto" for automatic tuning, or custom grid dict
+
+Classification Tree Parameters:
+- max_depth: Maximum depth of tree (default: None)
+- min_samples_split: Minimum samples to split (default: 2)
+- min_samples_leaf: Minimum samples in leaf (default: 1)
+- random_state: Random seed
+
+Classification Tree Tuning Parameters (if auto_tune_classification_tree=True):
+- classification_tree_search_space: Optuna search space dict
+- classification_tree_tune_n_trials: Number of Optuna trials (default: 30)
+- classification_tree_tune_n_splits: Number of CV folds (default: 5)
+
+2.8 Parallelization
+--------------------
+Causal forests support parallelization via the n_jobs parameter:
+- n_jobs=None: Single job (default)
+- n_jobs=-1: Use all available CPUs
+- n_jobs=N: Use N parallel jobs
+
+The classification tree (single DecisionTreeClassifier) does not support
+parallelization.
+
+================================================================================
+3. COMPARISON OF METHODS
+================================================================================
+
+3.1 Key Differences
+-------------------
+DivergenceTree:
+- Directly optimizes for heterogeneous treatment effects during tree building
+- Uses a joint objective function that considers both outcomes simultaneously
+- Grows and prunes based on treatment effect heterogeneity
+- Single unified algorithm
+
+TwoStepDivergenceTree:
+- Separates effect estimation from segmentation
+- Uses causal forests (ensemble method) for effect estimation
+- Uses classification tree for segmentation based on effect signs
+- Two-step approach: estimate effects first, then segment
+
+3.2 When to Use Each Method
+----------------------------
+DivergenceTree:
+- When you want a unified approach that directly optimizes for heterogeneity
+- When interpretability of the joint objective is important
+- When you want fine-grained control over the splitting criterion
+- When computational efficiency is important (single tree vs. forests)
+
+TwoStepDivergenceTree:
+- When you want to leverage the power of causal forests for effect estimation
+- When you have complex confounding that benefits from DML
+- When you want to separate effect estimation from segmentation
+- When you have computational resources for parallel causal forests
+
+3.3 Computational Complexity
+-----------------------------
+DivergenceTree:
+- O(n * p * q * k) where n=samples, p=features, q=quantiles, k=max_partitions
+- Single tree construction
+- Pruning adds O(k * log(k)) operations
+
+TwoStepDivergenceTree:
+- Causal forests: O(n * p * B * D) where B=n_estimators, D=max_depth
+- Classification tree: O(n * p * log(n))
+- Can benefit from parallelization for causal forests
+
+3.4 Hyperparameter Tuning
+--------------------------
+DivergenceTree:
+- Tunes max_partitions and min_improvement_ratio
+- Uses pseudo-outcome MSE loss
+- Requires manual tuning via tune_with_optuna()
+
+TwoStepDivergenceTree:
+- Causal forests: Automatic tuning via econml's tune() method
+- Classification tree: Optional Optuna tuning during fit()
+- More automated tuning process
+
+================================================================================
+4. DATA REQUIREMENTS
+================================================================================
+
+Both methods accept:
+- X: Feature matrix of shape (n_samples, n_features)
+- T: Treatment indicator of shape (n_samples,) with values in {0, 1}
+- YF: Firm outcome of shape (n_samples,) - binary or continuous, may contain NaN
+- YC: Consumer outcome of shape (n_samples,) - binary or continuous, may contain NaN
+
+Outcome Type Detection:
+- Binary: Detected if values are only in {0, 1}
+- Continuous: Detected if values contain other numeric values
+- Missing: NaN values are handled appropriately by each method
+
+================================================================================
+5. REGION TYPES
+================================================================================
+
+Both methods categorize observations into 4 region types:
+
+Region 1 (Win-Win):
+- τF > 0 and τC > 0
+- Both firm and consumer benefit from treatment
+- Ideal scenario for policy implementation
+
+Region 2 (Trade-off: Firm Wins):
+- τF > 0 and τC ≤ 0
+- Firm benefits but consumer does not (or is harmed)
+- Requires careful consideration of trade-offs
+
+Region 3 (Trade-off: Consumer Wins):
+- τF ≤ 0 and τC > 0
+- Consumer benefits but firm does not (or is harmed)
+- May require firm incentives or external support
+
+Region 4 (Lose-Lose):
+- τF ≤ 0 and τC ≤ 0
+- Neither party benefits from treatment
+- Should be avoided or requires different intervention
+
+================================================================================
+6. REFERENCES
+================================================================================
+
+- Wager, S., & Athey, S. (2018). Estimation and inference of heterogeneous
+  treatment effects using random forests. Journal of the American Statistical
+  Association, 113(523), 1228-1242.
+
+- econml: Microsoft Research's EconML library for causal machine learning
+  https://github.com/microsoft/EconML
+
+- scikit-learn: Machine learning library
+  https://scikit-learn.org/
+
+- Optuna: Hyperparameter optimization framework
+  https://optuna.org/
+
+================================================================================
+END OF DOCUMENT
+================================================================================
+
