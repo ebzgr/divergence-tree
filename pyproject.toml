@@ -27,3 +27,9 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/yourname/divergence-tree"
+
+[tool.setuptools]
+package-dir = {"" = "code/src"}
+
+[tool.setuptools.packages.find]
+where = ["code/src"]

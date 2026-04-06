@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Divergence Tree — Diagnostic Framework</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/dist/reveal.css"
+    />
+    <link rel="stylesheet" href="css/theme.css" />
+    <script>
+      MathJax = {
+        tex: {
+          inlineMath: [
+            ["\\(", "\\)"],
+            ["$", "$"],
+          ],
+          displayMath: [
+            ["\\[", "\\]"],
+            ["$$", "$$"],
+          ],
+        },
+        options: { skipHtmlTags: ["script", "noscript", "style", "textarea"] },
+      };
+    </script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"
+    ></script>
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides">
+        <!-- ============================================================
+             SLIDE 1 — Title
+             ============================================================ -->
+        <section data-background-color="#fef9f3">
+          <div class="slide-title">
+            <h1>
+              A Diagnostic Algorithmic Framework to Improve Primary KPIs Without
+              Sacrificing Secondary Objectives
+            </h1>
+            <p class="author-name">Ebrahim Barzegary</p>
+            <p class="affiliation-school">ESSEC Business School</p>
+            <p class="keywords">
+              Keywords: heterogeneous treatment effects · two outcomes · recursive
+              partitioning · contradiction segments · marketing experiments
+            </p>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 2 — Motivation: the hidden cost
+             ============================================================ -->
+        <section data-background-color="#f0f9f7">
+          <h2>Your A/B test won — but did it damage your secondary KPI?</h2>
+          <ul>
+            <li>
+              Experiments optimize a <strong>primary KPI</strong>; a guardrail
+              metric (e.g. retention) is usually checked <strong>on average</strong>
+            </li>
+            <li>
+              Averages hide <strong>localized degradation</strong>: a segment can
+              gain on the primary while losing on the secondary
+            </li>
+            <li>
+              Even when <strong>both</strong> metrics rise overall, a subgroup can
+              still see the secondary outcome decline
+            </li>
+            <li>
+              Standard reporting surfaces the mean — not <strong>where</strong> the
+              secondary KPI drops
+            </li>
+          </ul>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 3 — Examples
+             ============================================================ -->
+        <section data-background-color="#f5f0ff">
+          <h2>Trade-offs are common across marketing</h2>
+          <div class="card-grid">
+            <div class="card">
+              <h4>Email frequency</h4>
+              <p>
+                <span class="up">&#9650;</span> Clicks from more sends<br />
+                <span class="down">&#9660;</span> Higher unsubscribe rate for some users
+              </p>
+            </div>
+            <div class="card">
+              <h4>Ad creative</h4>
+              <p>
+                <span class="up">&#9650;</span> Short-term sales from bold claims<br />
+                <span class="down">&#9660;</span> Higher returns when expectations mismatch
+              </p>
+            </div>
+            <div class="card">
+              <h4>Promotional discounting</h4>
+              <p>
+                <span class="up">&#9650;</span> Orders during the promotion<br />
+                <span class="down">&#9660;</span> Full-price purchases afterward
+              </p>
+            </div>
+            <div class="card">
+              <h4>Content recommendation</h4>
+              <p>
+                <span class="up">&#9650;</span> Engagement with provocative content<br />
+                <span class="down">&#9660;</span> Long-run brand trust / satisfaction
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 4 — Literature positioning
+             ============================================================ -->
+        <section data-background-color="#e8f4fc">
+          <h2>Prior work optimizes frontiers — we diagnose locations</h2>
+          <div class="position-grid">
+            <div class="pos-col">
+              <h4>Trade-offs documented</h4>
+              <ul class="pos-refs">
+                <li>Ad load vs. satisfaction — <strong>Hohnhold et al.</strong> (2015)</li>
+                <li>Promos vs. long-run purchasing — <strong>Anderson &amp; Simester</strong> (2004)</li>
+                <li>Ads vs. subscriptions — <strong>Goli, Reiley &amp; Zhang</strong> (2025)</li>
+                <li>Short-run vs. long-run signals — <strong>Huang &amp; Ascarza</strong> (2024)</li>
+              </ul>
+            </div>
+            <div class="pos-col">
+              <h4>Frontier optimization</h4>
+              <ul class="pos-refs">
+                <li>Pareto frontier between outcomes — <strong>Rafieian et al.</strong> (2025)</li>
+              </ul>
+              <p class="pos-note pos-note-xs">
+                This paper maps or learns a <strong>frontier</strong> of good policies
+              </p>
+            </div>
+          </div>
+          <div class="pos-ours">
+            <strong>Our work is diagnostic:</strong> we do not output an optimal
+            policy. We surface <strong>where</strong> an intervention creates a bad
+            pairing of primary and secondary outcomes, so teams can investigate and redesign.
+            Unlike black-box pipelines, our tree is <strong>interpretable</strong> — you can
+            see <em>which</em> rules define each segment, which supports diagnosis and review.
+          </div>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 5 — Four regions (the core framework)
+             ============================================================ -->
+        <section data-background-color="#fff8f0">
+          <h2>Treatment responses fall into four types</h2>
+          <p class="slide-subtitle">
+            For each segment, the intervention can improve or degrade the firm’s
+            <strong>primary</strong> and <strong>secondary</strong> objectives —
+            giving four possible patterns:
+          </p>
+          <div class="region-grid-lg">
+            <div class="region-cell-lg region-win">
+              <span class="r-label">Region 1</span>
+              <span class="r-desc">
+                Primary <strong>up</strong>, secondary <strong>up</strong>
+              </span>
+              <span class="r-tag tag-green">Aligned lift</span>
+            </div>
+            <div class="region-cell-lg region-danger">
+              <span class="r-label">Region 2</span>
+              <span class="r-desc">
+                Primary <strong>up</strong>, secondary <strong>down</strong>
+              </span>
+              <span class="r-tag tag-red">Primary↑ / Secondary↓</span>
+            </div>
+            <div class="region-cell-lg region-warm-lg">
+              <span class="r-label">Region 3</span>
+              <span class="r-desc">
+                Primary <strong>down</strong>, secondary <strong>up</strong>
+              </span>
+              <span class="r-tag tag-orange">Primary↓ / Secondary↑</span>
+            </div>
+            <div class="region-cell-lg region-lose">
+              <span class="r-label">Region 4</span>
+              <span class="r-desc">
+                Primary <strong>down</strong>, secondary <strong>down</strong>
+              </span>
+              <span class="r-tag tag-gray">Joint decline</span>
+            </div>
+          </div>
+          <p class="slide-footnote">
+            A standard policy ships the treatment when the <strong>primary</strong>
+            metric improves — covering Regions 1 and 2. Region 2 is the
+            <strong>blind spot</strong>.
+          </p>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 6 — Region 2: the blind spot (redesigned)
+             ============================================================ -->
+        <section data-background-color="#fff5f5" class="blindspot-slide">
+          <h2>Region 2: looks fine on average, bad in a segment</h2>
+          <p class="slide-subtitle blindspot-lead">
+            <strong>Setup:</strong> email A/B test &mdash; <em>primary:</em> short-term sales
+            &middot; <em>secondary:</em> long-term retention.
+          </p>
+          <div class="bs-compare">
+            <div class="bs-col bs-col-aggregate">
+              <span class="bs-col-title">What you see in the dashboard</span>
+              <ul class="bs-bullets">
+                <li>Primary KPI <strong>up</strong> on average &rarr; ship decision</li>
+                <li>Secondary KPI <strong>flat</strong> in aggregate &rarr; guardrail OK</li>
+              </ul>
+            </div>
+            <div class="bs-col bs-col-segment">
+              <span class="bs-col-title">What is hidden (Region 2)</span>
+              <ul class="bs-bullets">
+                <li>A <strong>segment</strong> has primary &uarr; but secondary &darr;</li>
+                <li>The dip is <strong>washed out</strong> when you average everyone</li>
+              </ul>
+            </div>
+          </div>
+          <div class="bs-footer bs-footer-tight">
+            <p><strong>Takeaway:</strong> Region 2 is the blind spot of &ldquo;primary wins + average guardrail passes.&rdquo;</p>
+            <p class="bs-footer-sub">Diagnosis finds the segment <strong>before</strong> full rollout; fixing it needs a later iteration.</p>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 7 — Three-step diagnostic framework
+             ============================================================ -->
+        <section data-background-color="#fef3f8">
+          <h2>A three-step diagnostic framework</h2>
+          <div class="cycle-integrated">
+            <div class="cycle-card">
+              <span class="cycle-num">Step 1</span>
+              <h3>Test</h3>
+              <p>
+                Run a randomized experiment measuring <strong>both</strong>
+                outcomes on the same users.
+              </p>
+            </div>
+            <div class="cycle-card cycle-card-focus">
+              <span class="cycle-num">Step 2 — our focus</span>
+              <h3>Diagnose</h3>
+              <p>
+                Apply a segmentation algorithm to find
+                <strong>where</strong> the two outcomes diverge — especially
+                Region 2, the hidden trade-off.
+              </p>
+            </div>
+            <div class="cycle-card">
+              <span class="cycle-num">Step 3</span>
+              <h3>Improve</h3>
+              <p>
+                Investigate <strong>why</strong> the trade-off appears for
+                those segments. Redesign the intervention, then test again.
+              </p>
+            </div>
+          </div>
+          <p class="cycle-note">
+            &#8635; Each iteration feeds better data into the next diagnosis.
+            This paper contributes the <strong>diagnostic tool</strong> for Step 2.
+          </p>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 8 — A natural first attempt: Two-step pipeline
+             ============================================================ -->
+        <section data-background-color="#f0f4ff">
+          <h2>A natural first attempt: estimate, then classify</h2>
+          <div class="twostep-fancy twostep-stacked-full">
+            <div class="ts-stage ts-stage-fullrow">
+              <span class="ts-stage-label">Stage 1 — Estimate effects separately</span>
+              <div class="ts-stage-rows">
+                <div class="ts-row">
+                  <span class="ts-pill">X , T , Y₁</span>
+                  <span class="ts-arrow">&rarr;</span>
+                  <span class="ts-box">
+                    <span class="ts-box-icon">&#9656;</span>
+                    <span class="ts-box-text">Causal Forest</span>
+                  </span>
+                  <span class="ts-arrow">&rarr;</span>
+                  <span class="ts-output ts-output-math">\(\hat{\tau}_1\)</span>
+                </div>
+                <div class="ts-row">
+                  <span class="ts-pill">X , T , Y₂</span>
+                  <span class="ts-arrow">&rarr;</span>
+                  <span class="ts-box ts-box-alt">
+                    <span class="ts-box-icon">&#9656;</span>
+                    <span class="ts-box-text">Causal Forest</span>
+                  </span>
+                  <span class="ts-arrow">&rarr;</span>
+                  <span class="ts-output ts-output-math">\(\hat{\tau}_2\)</span>
+                </div>
+              </div>
+            </div>
+            <div class="ts-connector-v" aria-hidden="true">&#10549;</div>
+            <div class="ts-stage ts-stage-fullrow">
+              <span class="ts-stage-label">Stage 2 — Label regions &amp; classify</span>
+              <div class="ts-stage-rows">
+                <div class="ts-row ts-row-stack">
+                  <span class="ts-pill ts-pill-math">\(\hat{\tau}_1 , \hat{\tau}_2 , X\)</span>
+                  <span class="ts-arrow">&rarr;</span>
+                  <span class="ts-box ts-box-classify">
+                    <span class="ts-box-icon">&#9656;</span>
+                    <span class="ts-box-text">Classification Tree</span>
+                  </span>
+                  <span class="ts-arrow">&rarr;</span>
+                  <span class="ts-output ts-output-final">Segments</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="cons-row cons-row-warn cons-row-fullrow">
+            <div class="con-card con-card-warn">
+              <span class="con-warn-icon" aria-hidden="true">!</span>
+              <div class="con-card-body">
+                <strong>Complex pipeline</strong>
+                <p>Three models to fit, tune, validate</p>
+              </div>
+            </div>
+            <div class="con-card con-card-warn">
+              <span class="con-warn-icon" aria-hidden="true">!</span>
+              <div class="con-card-body">
+                <strong>Heavy tuning</strong>
+                <p>Many knobs per stage &rarr; overfitting risk</p>
+              </div>
+            </div>
+            <div class="con-card con-card-warn">
+              <span class="con-warn-icon" aria-hidden="true">!</span>
+              <div class="con-card-body">
+                <strong>Noise propagation</strong>
+                <p>Stage-1 error flows into Stage-2 labels</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 9 — Our approach: DivergenceTree (concept + example)
+             ============================================================ -->
+        <section data-background-color="#f4fdf8">
+          <h2>Our approach: one tree, one stage, both outcomes</h2>
+          <div class="approach-split">
+            <div class="approach-left">
+              <div class="approach-flow-v">
+                <div class="af-node af-input">
+                  <span class="af-title">Experiment data</span>
+                  X, T, Y₁, Y₂
+                </div>
+                <div class="af-arrow-v">&darr;</div>
+                <div class="af-node af-process">
+                  <span class="af-title">DivergenceTree</span>
+                  considers both outcomes<br />at every split
+                </div>
+                <div class="af-arrow-v">&darr;</div>
+                <div class="af-node af-output">
+                  <span class="af-title">Output</span>
+                  region labels + if-then rules
+                </div>
+              </div>
+              <ul class="approach-pros">
+                <li><strong>Single model</strong> — no pipeline to chain</li>
+                <li><strong>Interpretable</strong> — simple split rules</li>
+                <li><strong>Compact</strong> — fewer leaves than the benchmark</li>
+              </ul>
+            </div>
+            <div class="approach-right">
+              <span class="example-label">Example output</span>
+              <img
+                src="img/divtree_example.png"
+                alt="DivergenceTree example — color-coded leaves by region type"
+                class="divtree-example-img"
+              />
+              <div class="legend-row">
+                <span class="legend-chip legend-green">Primary↑ / Secondary↑</span>
+                <span class="legend-chip legend-red">Primary↑ / Secondary↓</span>
+                <span class="legend-chip legend-blue">Primary↓ / Secondary↑</span>
+                <span class="legend-chip legend-gray">Primary↓ / Secondary↓</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 10 — Recursive partitioning: same engine, different goals
+             ============================================================ -->
+        <section data-background-color="#f7f3ff">
+          <h2>Recursive partitioning: same engine, different goals</h2>
+          <p class="slide-subtitle paradigm-lead type-subtitle">
+            Same recipe: split, score, prune. <strong>Different objective &rarr; different segments.</strong>
+          </p>
+          <div class="paradigm-grid paradigm-grid-tight">
+            <div class="paradigm-card">
+              <span class="paradigm-name">CART</span>
+              <span class="paradigm-obj">min prediction error</span>
+              <p class="paradigm-line">Homogeneous segments for prediction.</p>
+            </div>
+            <div class="paradigm-card">
+              <span class="paradigm-name">Causal Tree</span>
+              <span class="paradigm-obj">max \(\tau\) heterogeneity</span>
+              <p class="paradigm-line">Targeting from one outcome.</p>
+            </div>
+            <div class="paradigm-card paradigm-card-ours">
+              <span class="paradigm-name">DivergenceTree</span>
+              <span class="paradigm-obj">joint heterogeneity + trade-off focus</span>
+              <p class="paradigm-line">Two outcomes &rarr; diagnosis.</p>
+            </div>
+          </div>
+          <ul class="tight-list paradigm-bottom type-subtitle-list">
+            <li>Greedy best split &rarr; repeat &rarr; prune; only the <strong>scoring function</strong> changes</li>
+            <li>Our \(g(\cdot)\) rewards splits where primary and secondary effects <strong>diverge</strong></li>
+          </ul>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 11 — The algorithm: how the tree grows
+             ============================================================ -->
+        <section data-background-color="#f7f7ff">
+          <h2>How the tree grows</h2>
+          <div class="algo-layout">
+            <div class="algo-steps">
+              <div class="algo-phase">
+                <span class="algo-phase-tag">Growth</span>
+              </div>
+              <div class="algo-step">
+                <span class="algo-num">1</span>
+                <div class="algo-text">
+                  Start with <strong>all data in one node</strong>.
+                  Compute the treatment effect on each outcome for the
+                  full sample.
+                </div>
+              </div>
+              <div class="algo-step">
+                <span class="algo-num">2</span>
+                <div class="algo-text">
+                  For every current leaf, evaluate <strong>every possible
+                  split</strong> (each variable, each threshold).
+                  Score it with the objective function \(g\).
+                </div>
+              </div>
+              <div class="algo-step algo-step-highlight">
+                <span class="algo-num">3</span>
+                <div class="algo-text">
+                  Pick the split with the <strong>highest gain</strong>
+                  across all leaves. Apply it.
+                </div>
+              </div>
+              <div class="algo-step">
+                <span class="algo-num">4</span>
+                <div class="algo-text">
+                  <strong>Repeat</strong> steps 2–3 until the maximum
+                  number of leaves is reached.
+                </div>
+              </div>
+              <div class="algo-phase">
+                <span class="algo-phase-tag algo-phase-prune">Pruning</span>
+              </div>
+              <div class="algo-step">
+                <span class="algo-num">5</span>
+                <div class="algo-text">
+                  Walk back from the leaves. <strong>Remove</strong> any
+                  split whose improvement ratio is below a threshold.
+                </div>
+              </div>
+            </div>
+            <div class="algo-diagram">
+              <div class="algo-diagram-label">Greedy global search</div>
+              <div id="tree-anim-container" class="tree-anim-wrap"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 12 — The split objective: what g measures
+             ============================================================ -->
+        <section data-background-color="#f0f4ff">
+          <h2>The split objective: what \(g\) measures</h2>
+          <div class="obj-split-layout">
+            <div class="obj-equations-col">
+              <div class="obj-formula-block">
+                <div class="obj-row">
+                  <div class="obj-piece obj-piece-z">
+                    <span class="obj-piece-label">Normalized deviation</span>
+                    \[
+                      z_k(S) = \frac{\hat\tau_k(S) - \bar\tau_k}{\sigma_k}
+                    \]
+                    <span class="obj-piece-gloss">
+                      How far is this segment's effect on outcome \(k\) from
+                      the overall average?
+                    </span>
+                  </div>
+                </div>
+                <div class="obj-row">
+                  <div class="obj-piece obj-piece-g">
+                    <span class="obj-piece-label">Segment score</span>
+                    \[
+                      g = \underbrace{z_1^2 + z_2^2}_{\text{heterogeneity}}
+                      + \lambda \cdot w_{\text{region}} \cdot
+                      \underbrace{|z_1 \cdot z_2|}_{\text{cross-movement}}
+                    \]
+                  </div>
+                </div>
+                <div class="obj-row obj-row-gain">
+                  <div class="obj-piece obj-piece-gain">
+                    <span class="obj-piece-label">Split gain</span>
+                    \[
+                      \Delta \propto n_L \cdot g(S_L) + n_R \cdot g(S_R)
+                    \]
+                    <span class="obj-piece-gloss">
+                      Weighted sum over both children. Largest \(\Delta\) wins.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="obj-visual-col">
+              <span class="obj-visual-label">Evaluating a candidate split</span>
+              <div id="split-visual-container" class="split-visual-wrap"></div>
+              <div class="split-legend">
+                <span class="split-legend-item">
+                  <span class="split-dot" style="background:#e67e22"></span>
+                  Treated
+                </span>
+                <span class="split-legend-item">
+                  <span class="split-dot" style="background:#1a1a2e"></span>
+                  Control
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 13 — Two methods: diagnosis vs optimization
+             ============================================================ -->
+        <section data-background-color="#fffaf0">
+          <h2>Diagnosis vs. optimization: two methods compared</h2>
+          <p class="slide-subtitle">
+            We compare our diagnostic approach against a benchmark rooted in the
+            <strong>optimization</strong> paradigm (Rafieian et al., 2025).
+          </p>
+          <div class="versus-grid">
+            <div class="versus-card versus-ours">
+              <span class="versus-badge">Our method</span>
+              <h3>DivergenceTree</h3>
+              <span class="versus-philosophy">Goal: <strong>diagnosis</strong></span>
+              <ul>
+                <li>One tree, <strong>joint</strong> split objective</li>
+                <li>\(\lambda \in \{0, 1, 2, 4, 8\}\) — dial for trade-off focus</li>
+              </ul>
+            </div>
+            <div class="versus-divider">
+              <span>vs</span>
+            </div>
+            <div class="versus-card versus-bench">
+              <span class="versus-badge versus-badge-alt">Benchmark</span>
+              <h3>Two-step pipeline</h3>
+              <span class="versus-philosophy">Goal: <strong>optimization</strong></span>
+              <ul>
+                <li>Causal forest per outcome (CausalForestDML)</li>
+                <li>Region labels → classification tree</li>
+                <li>Two variants: classification tuned by <strong>accuracy</strong>
+                    or <strong>recall of Region 2</strong></li>
+              </ul>
+            </div>
+          </div>
+          <p class="slide-footnote">
+            Can a purpose-built diagnostic tool match or beat a general-purpose
+            optimization pipeline at <strong>finding the trade-off region</strong>?
+          </p>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 14 — DGP: features, assignment, outcomes
+             ============================================================ -->
+        <section data-background-color="#f5f8ff">
+          <h2>Data generating process</h2>
+          <p class="slide-subtitle">
+            We generate synthetic experiments where every unit’s
+            <strong>true region type</strong> is known.
+          </p>
+          <div class="dgp-model dgp-slide-tight">
+            <div class="dgp-eq-card">
+              <span class="dgp-eq-label">Feature structure</span>
+              <p class="dgp-eq-desc dgp-eq-desc-sm">
+                \(k\) categorical variables, each one-hot encoded.
+                Total features fixed at <strong>30</strong>:
+                <code>n_categories = [30/k] &times; k</code>.
+              </p>
+            </div>
+            <div class="dgp-eq-card">
+              <span class="dgp-eq-label">Treatment effects &amp; region assignment</span>
+              <p class="dgp-eq-desc dgp-eq-desc-sm">
+                Category combinations are randomly assigned to four regions.
+                Region 2 receives a <strong>rareness</strong> share of all
+                combinations; the remaining three regions split the rest equally.
+              </p>
+              <div class="dgp-te-grid">
+                <span>\(\tau_F = +\text{intensity}\) if region \(\in \{1,2\}\),
+                      else \(-\text{intensity}\)</span>
+                <span>\(\tau_C = +\text{intensity}\) if region \(\in \{1,3\}\),
+                      else \(-\text{intensity}\)</span>
+              </div>
+            </div>
+            <div class="dgp-eq-card">
+              <span class="dgp-eq-label">Outcome model</span>
+              \[
+                Y_k \;=\; \underbrace{X \cdot \beta_k}_{\text{baseline}}
+                \;+\; \tau_k \,\cdot\, T \;+\; \varepsilon_k
+              \]
+              <span class="dgp-eq-gloss dgp-eq-desc-sm">
+                \(\beta_k \sim \mathcal{N}(0,1)\) random coefficients &ensp;|&ensp;
+                \(T \in \{0,1\}\) with \(P(T{=}1)=0.5\) &ensp;|&ensp;
+                \(\varepsilon_k \sim \mathcal{N}(0,\sigma)\)
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 15 — Simulation factors and evaluation metrics
+             ============================================================ -->
+        <section data-background-color="#f0f4ff">
+          <h2>Simulation factors and evaluation</h2>
+          <div class="factors-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Factor</th>
+                  <th>Range</th>
+                  <th>What it controls</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Noise</strong> \(\sigma\)</td>
+                  <td>Log-uniform [0.01, 10]</td>
+                  <td>Outcome noise — harder to detect effects when high</td>
+                </tr>
+                <tr>
+                  <td><strong>Sample size</strong></td>
+                  <td>Log-uniform [10 000, 500 000]</td>
+                  <td>Training observations — from small to large experiments</td>
+                </tr>
+                <tr>
+                  <td><strong>Sparsity</strong> \(k\)</td>
+                  <td>{1, 2, 3, 4, 5, 6}</td>
+                  <td>Low \(k\): narrow tree; high \(k\): wider, deeper tree</td>
+                </tr>
+                <tr>
+                  <td><strong>Rareness</strong></td>
+                  <td>Uniform [0.01, 0.50]</td>
+                  <td>Share of Region 2 in the data — rarer = harder to find</td>
+                </tr>
+                <tr>
+                  <td><strong>Intensity</strong></td>
+                  <td>Log-uniform [0.1, 1.0]</td>
+                  <td>Strength of treatment effects — weaker = subtler signal</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="metrics-split">
+            <div class="metrics-group">
+              <h4>Performance metrics</h4>
+              <ul>
+                <li>Overall <strong>accuracy</strong></li>
+                <li>Region 2 <strong>recall</strong></li>
+                <li>Region 2 <strong>precision</strong></li>
+              </ul>
+            </div>
+            <div class="metrics-group metrics-other">
+              <h4>Other metrics</h4>
+              <ul>
+                <li><strong>Tree size</strong> (number of leaves)</li>
+                <li><strong>Processing time</strong></li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 16 — Aggregate results
+             ============================================================ -->
+        <section data-background-color="#f8fcff">
+          <h2>Aggregate method comparison</h2>
+          <div class="chart-controls">
+            <label for="metric-select-aggregate">Metric</label>
+            <select id="metric-select-aggregate"></select>
+          </div>
+          <div id="plot-aggregate" class="plotly-chart-full"></div>
+          <p class="slide-footnote">
+            Bars show the mean across 4 400 simulations; whiskers show &plusmn;1 std.
+          </p>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 17 — Results by factor
+             ============================================================ -->
+        <section data-background-color="#f5f8ff">
+          <h2>Performance by simulation factor</h2>
+          <div class="chart-controls">
+            <label for="factor-select">Factor</label>
+            <select id="factor-select"></select>
+            <label for="metric-select-factor">Metric</label>
+            <select id="metric-select-factor"></select>
+          </div>
+          <div id="plot-factor" class="plotly-chart-full"></div>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 18 — Key findings
+             ============================================================ -->
+        <section data-background-color="#f0fff4">
+          <h2>Why DivergenceTree is a good fit for industry</h2>
+          <div class="findings-grid">
+            <div class="finding-card finding-primary">
+              <span class="finding-num">1</span>
+              <h4>Better where it matters most</h4>
+              <p>
+                Our method gains an edge as <strong>noise increases</strong>,
+                <strong>sample size grows</strong>, and the trade-off region
+                is <strong>rare</strong> — exactly the conditions in most
+                industry A/B tests (large data, small Region 2, noisy signals)
+              </p>
+            </div>
+            <div class="finding-card">
+              <span class="finding-num">2</span>
+              <h4>Parsimonious and fast</h4>
+              <p>
+                DivergenceTree produces <strong>~25 leaves vs. ~70–150</strong>
+                for two-step, and runs <strong>30&times; faster</strong> on CPU
+                — critical when teams need to re-diagnose after every
+                intervention redesign
+              </p>
+            </div>
+            <div class="finding-card">
+              <span class="finding-num">3</span>
+              <h4>Robust to data engineering choices</h4>
+              <p>
+                A single model with one tuning dial (\(\lambda\)) avoids the
+                multi-model pipeline of two-step — fewer degrees of freedom,
+                making results more <strong>reproducible</strong> and suitable
+                for <strong>regulatory audits</strong>
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 19 — Mini case 1: Advertising and product returns
+             ============================================================ -->
+        <section data-background-color="#f5f0ff">
+          <h2 class="case-h2">Advertising creative and product returns</h2>
+          <div class="case-paper">
+            <p class="case-scenario">
+              <strong>Scenario.</strong> A consumer electronics brand tests new ad creative (premium features)
+              against the existing value-focused creative. <strong>Primary:</strong> unit sales.
+              <strong>Secondary:</strong> 30-day product return rate.
+            </p>
+            <p class="case-step">
+              <strong>1. Test.</strong> The new creative lifts unit sales by about 12%; the aggregate return rate
+              ticks up slightly but is not significant at the overall level.
+            </p>
+            <p class="case-step">
+              <strong>2. Diagnose.</strong> A clear contradiction appears for buyers with <em>lower prior spending
+              and limited category experience</em>: sales rise by about 22% but returns rise by about 35%.
+              Experienced buyers show a sales gain without a return spike.
+            </p>
+            <p class="case-step">
+              <strong>3. Improve.</strong> Focus groups find premium framing set expectations the mid-range product
+              did not meet. The team ships an alternative creative for that segment—realistic use cases and
+              value-for-money—keeping the lift while moving returns back toward baseline in a follow-up test.
+            </p>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 20 — Mini case 2: Promotional discounting
+             ============================================================ -->
+        <section data-background-color="#fff8f0">
+          <h2 class="case-h2">Promotional discounting</h2>
+          <div class="case-paper">
+            <p class="case-scenario">
+              <strong>Scenario.</strong> An online fashion retailer emails a 25% discount to a random subset;
+              everyone else gets a standard newsletter. <strong>Primary:</strong> immediate purchase rate.
+              <strong>Secondary:</strong> repeat purchasing within 90 days.
+            </p>
+            <p class="case-step">
+              <strong>1. Test.</strong> The discount email raises immediate purchases by about 30%; repeat
+              purchasing shows a small, non-significant decline on average.
+            </p>
+            <p class="case-step">
+              <strong>2. Diagnose.</strong> Two Region&nbsp;2-style segments emerge: <em>Segment&nbsp;A</em>
+              (moderately price-sensitive, mixed purchase history)—about +35% immediate purchases but about
+              &minus;10% repeat; <em>Segment&nbsp;B</em> (deal-seekers)—over +45% immediate but about &minus;30%
+              repeat, consistent with price anchoring at the discounted level.
+            </p>
+            <p class="case-step">
+              <strong>3. Improve.</strong> Profit math keeps the 25% offer for Segment&nbsp;A; for Segment&nbsp;B
+              the team redesigns to a loyalty-linked offer (e.g. discount today plus a modest next-purchase
+              incentive) and retargets by email.
+            </p>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 21 — Mini case 3: Content recommendation
+             ============================================================ -->
+        <section data-background-color="#f5f8ff">
+          <h2 class="case-h2">Content recommendation (social media)</h2>
+          <div class="case-paper">
+            <p class="case-scenario">
+              <strong>Scenario.</strong> A platform tests a new recommender aimed at engagement (likes, shares,
+              time on site). <strong>Secondary:</strong> emotional valence of user-generated content (sentiment of
+              posts after exposure)—higher valence reflects more extreme language.
+            </p>
+            <p class="case-step">
+              <strong>1. Test.</strong> The new algorithm raises average engagement by about 8%; aggregate
+              sentiment is essentially unchanged.
+            </p>
+            <p class="case-step">
+              <strong>2. Diagnose.</strong> A segment with <em>narrow consumption patterns</em> and membership in
+              ideologically concentrated communities shows about +15% engagement and a significant shift toward
+              more extreme language in subsequent posts—engagement gains paired with higher polarization.
+            </p>
+            <p class="case-step">
+              <strong>3. Improve.</strong> Analysis suggests echo-chamber reinforcement; the team adds a
+              <em>diversity constraint</em> (minimum exposure outside the usual cluster). A follow-up experiment
+              keeps most of the engagement gain while reducing the valence shift to non-significant levels.
+            </p>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 22 — Challenges and open questions
+             ============================================================ -->
+        <section data-background-color="#fff5f5">
+          <h2>Challenges and open questions</h2>
+          <div class="challenges-grid-2x2 challenges-titles-only">
+            <div class="challenge-item">
+              <span class="challenge-num">1</span>
+              <div><strong>Positioning</strong></div>
+            </div>
+            <div class="challenge-item">
+              <span class="challenge-num">2</span>
+              <div><strong>Simulation + mini case structure</strong></div>
+            </div>
+            <div class="challenge-item">
+              <span class="challenge-num">3</span>
+              <div><strong>Highly variable DGP</strong></div>
+            </div>
+            <div class="challenge-item">
+              <span class="challenge-num">4</span>
+              <div><strong>Target journals</strong></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             SLIDE 23 — Thank you
+             ============================================================ -->
+        <section data-background-color="#fef9f3">
+          <div class="thankyou">
+            <h1 class="ty-title">Thank you!</h1>
+            <div class="ty-dots">
+              <span class="ty-dot ty-dot-1"></span>
+              <span class="ty-dot ty-dot-2"></span>
+              <span class="ty-dot ty-dot-3"></span>
+              <span class="ty-dot ty-dot-4"></span>
+              <span class="ty-dot ty-dot-5"></span>
+            </div>
+            <p class="ty-questions">Any questions / suggestions?</p>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/dist/reveal.js"></script>
+    <script>
+      Reveal.initialize({
+        hash: true,
+        slideNumber: "c/t",
+        transition: "fade",
+        // Design for smaller screens so Reveal scales *up* more often than down.
+        // This keeps body text readable on typical laptops.
+        width: 1120,
+        height: 630,
+        margin: 0.02,
+        center: true,
+        // Projector-friendly scaling: avoid extreme shrink/grow.
+        minScale: 0.6,
+        maxScale: 1.35,
+      });
+      function mjTypeset(elements) {
+        if (window.MathJax && MathJax.typesetPromise) {
+          var arr = Array.isArray(elements) ? elements : [elements];
+          return MathJax.typesetPromise(arr);
+        }
+      }
+      function whenMathJaxReady(fn) {
+        if (window.MathJax && MathJax.typesetPromise) {
+          fn();
+          return;
+        }
+        var n = 0;
+        var t = setInterval(function () {
+          n += 1;
+          if (window.MathJax && MathJax.typesetPromise) {
+            clearInterval(t);
+            fn();
+          } else if (n > 200) {
+            clearInterval(t);
+          }
+        }, 50);
+      }
+      Reveal.on("ready", function () {
+        whenMathJaxReady(function () {
+          mjTypeset(document.querySelector(".slides"));
+        });
+      });
+      Reveal.on("slidechanged", function (event) {
+        whenMathJaxReady(function () {
+          mjTypeset(event.currentSlide);
+        });
+      });
+    </script>
+    <script src="js/tree-animation.js"></script>
+    <script src="js/split-visual.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <script src="js/chart-data.js"></script>
+    <script src="js/charts.js"></script>
+  </body>
+</html>

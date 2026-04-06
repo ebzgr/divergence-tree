@@ -2,6 +2,7 @@
 Analysis for region-stratified lambda + TwoStep simulation results (v3).
 """
 
+import json
 import os
 import sys
 import time
@@ -34,6 +35,19 @@ def _method_configs():
 def _log(msg: str, verbose: bool) -> None:
     if verbose:
         print(msg, flush=True)
+
+
+def _round5(x: object) -> object:
+    """Round floats for JSON readability; keep ints/None as-is."""
+    if x is None:
+        return None
+    try:
+        xf = float(x)
+    except Exception:
+        return x
+    if not np.isfinite(xf):
+        return None
+    return float(f"{xf:.5f}")
 
 
 def _metric_bad_threshold(metric: str) -> Tuple[str, float]:
@@ -187,15 +201,34 @@ def create_diagnostics_tables(
                         }
                     )
 
+    var_csv = os.path.join(output_dir, "diagnostics_factor_bin_variability.csv")
     var_df = pd.DataFrame(variability_rows)
     if not var_df.empty:
         var_df["std_p90"] = var_df.groupby(["factor", "metric", "method"])["std"].transform(
             lambda s: float(np.quantile(s, 0.9))
         )
         var_df["unpredictable"] = var_df["std"] >= var_df["std_p90"]
-
-    var_csv = os.path.join(output_dir, "diagnostics_factor_bin_variability.csv")
-    var_df.sort_values(["unpredictable", "std"], ascending=[False, False]).to_csv(var_csv, index=False)
+        var_df = var_df.sort_values(["unpredictable", "std"], ascending=[False, False])
+    else:
+        # Keep a stable schema even when there are not enough rows per factor/bin.
+        var_df = pd.DataFrame(
+            columns=[
+                "factor",
+                "factor_bin",
+                "metric",
+                "method",
+                "prefix",
+                "n",
+                "mean",
+                "std",
+                "iqr",
+                "q05",
+                "q95",
+                "std_p90",
+                "unpredictable",
+            ]
+        )
+    var_df.to_csv(var_csv, index=False)
     _log(f"  [diagnostics] wrote {var_csv}", verbose)
 
 
@@ -250,6 +283,8 @@ def create_method_comparison_plots(
 
 def create_factor_comparison_plots(df: pd.DataFrame, output_dir: str, *, verbose: bool = True) -> None:
     utils.safe_makedirs(output_dir)
+    json_dir = os.path.join(os.path.dirname(output_dir), "json")
+    utils.safe_makedirs(json_dir)
 
     method_configs = [
         ("divtree_lambda0", "λ=0", "#1f77b4", "o"),
@@ -324,6 +359,8 @@ def create_factor_comparison_plots(df: pd.DataFrame, output_dir: str, *, verbose
             factor_values = sorted(df[factor_col].dropna().unique())
             df_plot = df.copy()
             df_plot["_factor_bin"] = df_plot[factor_col]
+            bin_edges = None
+            bin_midpoints = None
         else:
             n_bins = min(20, max(10, len(df[factor_col].dropna().unique()) // 10))
             factor_min = df[factor_col].min()
@@ -346,6 +383,17 @@ def create_factor_comparison_plots(df: pd.DataFrame, output_dir: str, *, verbose
 
         if len(factor_values) == 0:
             continue
+
+        # JSON payload: compact chart data (shared x array + per-method series).
+        factor_json = {
+            "factor": factor_name,
+            "xLabel": factor_info["xlabel"],
+            "logX": bool(factor_info.get("log_x", False)),
+            "x": [int(v) if is_discrete else _round5(v) for v in factor_values],
+            # Provide bin edges only for continuous factors (for tooltips if needed).
+            "binEdges": None if is_discrete else [_round5(x) for x in bin_edges],
+            "metrics": {},
+        }
 
         for metric in metrics:
             done_factor += 1
@@ -375,6 +423,8 @@ def create_factor_comparison_plots(df: pd.DataFrame, output_dir: str, *, verbose
                         all_valid = False
                         break
                     row_data[f"{label}_mean"] = float(np.mean(values))
+                    row_data[f"{label}_std"] = float(np.std(values))
+                    row_data[f"{label}_n"] = int(len(values))
                 if not all_valid:
                     continue
                 factor_data.append(row_data)
@@ -422,25 +472,59 @@ def create_factor_comparison_plots(df: pd.DataFrame, output_dir: str, *, verbose
             plt.close()
             _log(f"  [factor plots]     -> wrote {out_path}", verbose)
 
+            # Attach compact metric payload to factor JSON (aligned to factor_data x bins).
+            x_metric = [
+                int(d["factor_value"]) if is_discrete else _round5(float(d["factor_value"]))
+                for d in factor_data
+            ]
+            metric_payload = {"x": x_metric, "series": {}}
+            for _, method_label, _, _ in method_configs:
+                metric_payload["series"][method_label] = {
+                    "n": [int(d[f"{method_label}_n"]) for d in factor_data],
+                    "mean": [_round5(d[f"{method_label}_mean"]) for d in factor_data],
+                    "std": [_round5(d[f"{method_label}_std"]) for d in factor_data],
+                }
+            factor_json["metrics"][metric] = metric_payload
+
+        # Write one JSON per factor for HTML plotting.
+        json_path = os.path.join(json_dir, f"factor_comparison_{factor_name}.json")
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(factor_json, f, indent=2)
+        _log(f"  [factor json]      -> wrote {json_path}", verbose)
+
 
 def create_summary_table(df: pd.DataFrame, output_dir: str, metrics: List[str], *, verbose: bool = True) -> None:
     utils.safe_makedirs(output_dir)
     rows = []
+    summary_json = {"n": int(len(df)), "metrics": {}}
     for metric in metrics:
         row = {"Metric": metric}
+        metric_payload = {"series": {}}
         for _, prefix, label in _method_configs():
             col = f"{prefix}_total_cpu_time" if metric == "cpu_time" and prefix.startswith("twostep_") else f"{prefix}_{metric}"
             if col in df.columns and df[col].notna().any():
                 vals = df[col].dropna().values
-                row[f"{label} (mean)"] = float(np.mean(vals))
-                row[f"{label} (std)"] = float(np.std(vals))
+                mean = float(np.mean(vals))
+                std = float(np.std(vals))
+                row[f"{label} (mean)"] = mean
+                row[f"{label} (std)"] = std
+                metric_payload["series"][label] = {"n": int(len(vals)), "mean": _round5(mean), "std": _round5(std)}
             else:
                 row[f"{label} (mean)"] = np.nan
                 row[f"{label} (std)"] = np.nan
+                metric_payload["series"][label] = {"n": 0, "mean": None, "std": None}
         rows.append(row)
+        summary_json["metrics"][metric] = metric_payload
     out_csv = os.path.join(output_dir, "method_comparison_summary.csv")
     pd.DataFrame(rows).to_csv(out_csv, index=False)
     _log(f"  [summary table] wrote {out_csv}", verbose)
+
+    json_dir = os.path.join(os.path.dirname(output_dir), "json")
+    utils.safe_makedirs(json_dir)
+    out_json = os.path.join(json_dir, "method_comparison_summary.json")
+    with open(out_json, "w", encoding="utf-8") as f:
+        json.dump(summary_json, f, indent=2)
+    _log(f"  [summary json]  wrote {out_json}", verbose)
 
 
 def analyze_region_stratified(

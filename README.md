@@ -77,12 +77,8 @@ pip install -e .
 # Option 1: Upgrade pip first
 pip install --upgrade pip setuptools wheel
 
-# Option 2: Install with exact versions (if flexible versions fail)
-pip install -r requirements-exact.txt
-pip install -e .
-
-# Option 3: Install dependencies separately
-pip install -r requirements.txt
+# Option 2: Install dependencies separately
+pip install -r config/requirements.txt
 pip install -e .
 ```
 
@@ -94,7 +90,7 @@ pip install -e .
 
 1. **"No module named 'econml'" or missing dependencies**:
 
-   - Ensure all dependencies are installed: `pip install -r requirements.txt`
+   - Ensure all dependencies are installed: `pip install -r config/requirements.txt`
    - Some systems may need to install build tools (e.g., `build-essential` on Linux)
 
 2. **NumPy compatibility errors**:
@@ -108,7 +104,7 @@ pip install -e .
    - Linux/Mac: May need `cmake` and `g++`
 
 4. **Version conflicts**:
-   - Use `requirements-exact.txt` for exact version matching
+   - Recreate a clean environment and reinstall from `config/requirements.txt`
    - Or create a fresh virtual environment: `python -m venv .venv --clear`
 
 ## Usage

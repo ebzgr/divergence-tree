@@ -1,31 +1,3 @@
-# Data files
-*.csv
-*.pickle
-*.pkl
-
-# Image files
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.bmp
-*.tiff
-
-# Data directories
-data/
-tests/Trial/data/
-tests/*/data/
-
-# Simulation output directories
-simulations/*/comprehensive_simulation/output/
-simulations/*/comprehensive_simulation/*/output/
-simulations/*/data/
-simulations/*/*/data/
-
-# Results directories (optional - uncomment if you don't want to track results)
-# tests/Trial/results/
-# results/
-
 # Python
 __pycache__/
 *.py[cod]
@@ -33,21 +5,13 @@ __pycache__/
 *.so
 .Python
 build/
-develop-eggs/
 dist/
-downloads/
-eggs/
 .eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
 *.egg
-MANIFEST
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Virtual environments
 .env
@@ -55,16 +19,36 @@ MANIFEST
 env/
 venv/
 ENV/
-env.bak/
-venv.bak/
 
-# IDE
+# IDE / OS
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-
-# OS
 .DS_Store
 Thumbs.db
+
+# Exclude research writing/bibliography/data
+paper/
+refs/
+data/
+ai-doc/
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.log
+*.lot
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+*.nav
+*.snm
+*.vrb

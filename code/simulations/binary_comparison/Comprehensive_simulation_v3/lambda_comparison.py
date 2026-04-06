@@ -3,9 +3,7 @@ Region-stratified lambda + TwoStep comparison simulation (v3).
 """
 
 import gc
-import gzip
 import os
-import pickle
 import sys
 from pathlib import Path
 from typing import Any, Dict
@@ -30,12 +28,6 @@ sys.path.append(os.path.join(BINARY_COMPARISON_DIR, "comprehensive_simulation"))
 import utils
 
 
-def _save_tree_artifact(path: str, payload: Dict[str, Any]) -> None:
-    utils.safe_makedirs(os.path.dirname(path))
-    with gzip.open(path, "wb") as f:
-        pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
-
-
 def run_single_lambda_simulation(
     simulation_id: int,
     aspect_values: Dict[str, Any],
@@ -45,6 +37,7 @@ def run_single_lambda_simulation(
 ) -> Dict[str, Any]:
     result = {"simulation_id": simulation_id, **aspect_values}
     lambda_values = config.LAMBDA_VALUES
+
     try:
         n_users_train = aspect_values["data_size"]
         n_users_test = n_users_train // 2
@@ -54,7 +47,6 @@ def run_single_lambda_simulation(
         val_data_file = os.path.join(data_dir, "val_data.pkl")
         test_data_file = os.path.join(data_dir, "test_data.pkl")
         functional_form_file = os.path.join(data_dir, "functional_form.pickle")
-        trees_file = os.path.join(data_dir, "trees.pkl.gz")
 
         if all(os.path.exists(f) for f in [train_data_file, val_data_file, test_data_file, functional_form_file]):
             train_df = pd.read_pickle(train_data_file)
@@ -147,7 +139,6 @@ def run_single_lambda_simulation(
             result["outcome_untreated_std"] = np.nan
 
         method_results = []
-        divtree_models = {}
         for lam in lambda_values:
             mr = run_divtree_method(
                 X_train,
@@ -164,13 +155,9 @@ def run_single_lambda_simulation(
                 regions_of_interest=None if lam == 0 else [2],
                 random_seed=random_seed,
                 verbose=False,
-                return_model=True,
+                return_model=False,
             )
-            model = mr.pop("_model", None)
             method_results.append((lam, mr))
-            if model is not None:
-                key = "divtree_lambda0" if lam == 0 else f"divtree_lambda{lam}_region2"
-                divtree_models[key] = model
             prefix = "divtree_lambda0" if lam == 0 else f"divtree_lambda{lam}_region2"
             for k, v in mr.items():
                 if k not in ["region_type_pred_train", "region_type_pred_test"]:
@@ -189,9 +176,7 @@ def run_single_lambda_simulation(
             region_type_test,
             random_seed=random_seed,
             verbose=False,
-            return_trees=True,
         )
-        twostep_trees = tw.pop("_classification_trees", {})
         pred_skip = [
             "twostep_tuned_region_type_pred_train",
             "twostep_tuned_region_type_pred_test",
@@ -211,20 +196,6 @@ def run_single_lambda_simulation(
             test_df[f"{prefix}_region_pred"] = tw.get(f"{prefix}_region_type_pred_test", np.nan)
         train_df.to_pickle(train_data_file)
         test_df.to_pickle(test_data_file)
-
-        _save_tree_artifact(
-            trees_file,
-            {
-                "simulation_id": simulation_id,
-                "lambda_values": lambda_values,
-                "divtree_models": divtree_models,
-                "twostep_classification_trees": twostep_trees,
-                "meta": {
-                    "aspect_values": aspect_values,
-                },
-            },
-        )
-        result["tree_artifact_file"] = trees_file
 
     except Exception:
         metrics = [
@@ -261,8 +232,13 @@ def run_single_lambda_simulation(
             result[f"{prefix}_cpu_time"] = np.nan
             result[f"{prefix}_total_cpu_time"] = np.nan
         result["twostep_causal_forest_cpu_time"] = np.nan
-        result["tree_artifact_file"] = None
     finally:
+        # Help worker processes release large temporary objects sooner.
+        train_df = val_df = test_df = merged = None
+        X_train = T_train = YF_train = YC_train = None
+        X_val = T_val = YF_val = YC_val = None
+        X_test = region_type_test = functional_form = None
+        tw = twostep_trees = divtree_models = method_results = None
         gc.collect()
 
     return result
@@ -290,7 +266,7 @@ def run_lambda_comparison(
         seed = base_random_seed + simulation_id * 1000
         tasks.append((simulation_id, sample_random_aspects(seed), seed))
 
-    all_results = []
+    all_results_df = pd.DataFrame()
     n_batches = (n_simulations + batch_size - 1) // batch_size
     for b in range(n_batches):
         lo = b * batch_size
@@ -299,14 +275,25 @@ def run_lambda_comparison(
         if verbose:
             print(f"Batch {b+1}/{n_batches}: {lo+1}-{hi}")
         batch_results = Parallel(n_jobs=effective_n_jobs, verbose=10 if verbose else 0)(
-            delayed(run_single_task_with_retry)(task, base_dir, run_single_lambda_simulation)
+            delayed(run_single_task_with_retry)(
+                task,
+                base_dir,
+                run_single_lambda_simulation,
+                verbose=False,
+            )
             for task in batch_tasks
         )
-        all_results.extend(batch_results)
-        pd.DataFrame(all_results).to_pickle(results_file)
+        batch_df = pd.DataFrame(batch_results)
+        if all_results_df.empty:
+            all_results_df = batch_df
+        else:
+            all_results_df = pd.concat([all_results_df, batch_df], ignore_index=True)
+        all_results_df.to_pickle(results_file)
+        del batch_results
+        del batch_df
         gc.collect()
     if verbose:
-        print(f"Completed {len(all_results)} simulations. Results: {results_file}")
+        print(f"Completed {len(all_results_df)} simulations. Results: {results_file}")
 
 
 if __name__ == "__main__":
