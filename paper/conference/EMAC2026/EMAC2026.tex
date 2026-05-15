@@ -1,0 +1,188 @@
+% EMAC 2026 competitive paper (double-blind). Compile from this directory:
+% pdflatex EMAC2026 && bibtex EMAC2026 && pdflatex EMAC2026 && pdflatex EMAC2026
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[hmargin=2.5cm,vmargin=2.5cm]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{indentfirst}
+\setlength{\parindent}{1.5em}
+\usepackage{times}
+\usepackage[T1]{fontenc}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{subcaption}
+\usepackage{caption}
+\usepackage{amsmath,amssymb}
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=1.5em}
+
+\usepackage[round,authoryear]{natbib}
+\usepackage[hidelinks]{hyperref}
+\hypersetup{
+  pdftitle={Unblackbox: Understanding Tradeoffs in Personalized Marketing Interventions},
+  pdfauthor={},
+  pdfkeywords={personalized marketing; heterogeneous treatment effects; A/B testing},
+}
+
+\usepackage{titlesec}
+\titleformat{\section}[hang]{\bfseries}{\thesection.}{0.5em}{}
+\titlespacing*{\section}{0pt}{1ex plus .2ex}{1ex plus .2ex}
+\titleformat{\subsection}[hang]{\itshape}{\thesubsection}{0.5em}{}
+\titlespacing*{\subsection}{0pt}{1ex plus .2ex}{0.5ex plus .1ex}
+
+\pagestyle{plain}
+\setcounter{secnumdepth}{2}
+
+\begin{document}
+\thispagestyle{plain}
+
+% --- Page 1 (blind): title fixed per EMAC; page-1 abstract capped at 1000 characters by EMAC ---
+\begin{center}
+{\fontsize{14}{17}\selectfont\bfseries Unblackbox: Understanding Tradeoffs in Personalized Marketing Interventions\par}
+\end{center}
+\vspace{0.8\baselineskip}
+
+\input{abstract_emac}
+
+\noindent{\fontsize{12}{18}\selectfont\EMACAbstractText\par}
+
+\vspace{0.8\baselineskip}
+\noindent\textit{Keywords: personalized marketing, heterogeneous treatment effects, A/B testing}
+
+\vspace{0.5\baselineskip}
+\noindent\textit{Intended track: Marketing Analytics and Research Method}
+
+\vspace{1.0\baselineskip}
+\clearpage
+
+\section{Introduction}
+
+Modern firms routinely experiment with and re-optimize marketing interventions using controlled tests and live performance data. They design personalized policies---rules mapping customer characteristics to treatment---estimated to maximize scalar objectives such as conversion, revenue, or engagement \citep{simester2020targeting, lemmens2025personalization, ascarza2018retention}. Yet the same organizations almost always care about several outcomes at once, for example lifting sales without damaging churn, satisfaction, or brand equity \citep{chandy2021better, hohnhold2015focusing, anderson2004longrun}.
+
+A common operational response is to monitor \emph{guardrail} metrics: after a policy is trained on a primary objective, analysts compare aggregate treatment effects on secondary outcomes to ensure that short-run gains are not accompanied by unacceptable deterioration elsewhere. These checks are valuable, but they evaluate a policy still designed mainly on one target; they screen population averages rather than constructing representations that use both outcomes jointly when describing heterogeneity. Another approach compresses multiple outcomes into a composite or weighted score; in practice it is often difficult for managers to commit to fixed weights when the managerial question is fundamentally about trade-offs rather than scalarization \citep{rafieian2025multiobjective}. Recent multi-objective personalization work estimates flexible heterogeneous effects and summarizes feasible policies, including Pareto frontiers, so firms can choose allocations in the language of trade-offs \citep{rafieian2025multiobjective}.
+
+These methods are largely \emph{prescriptive}: they emphasize \emph{who} should receive an intervention more than \emph{why} trade-offs arise across customers. Combined with opaque high-flexibility targeting models, that emphasis creates practical limitations. It can restrict \emph{organizational learning}, because optimization artifacts are hard to interrogate even when they improve lift. Aggregate reporting can \emph{hide localized harms}: small segments where a primary metric improves while a secondary worsens may be invisible in pooled estimates yet consequential for churn, complaints, or scrutiny \citep{lambrecht2019algorithmic, helberger2020choice}. Fully automated targeting also collapses rich strategy into a single objective, even though firms often want segment-specific balances between horizons or stakeholders. Finally, treating the intervention as fixed and focusing only on allocation sidesteps the reality that many trade-offs stem from product or creative design misalignment---understanding \emph{where} tensions arise is often a prerequisite to redesign toward win--win improvements.
+
+This paper takes a \emph{descriptive} approach. Using standard randomized A/B data $(X,T,Y^A,Y^B)$, we build a transparent, interpretable segmentation: a small set of explicit rules that show how two outcomes co-move with the intervention---where trade-offs are large, small, or aligned. The goal is to support learning from experiments, deliberative segment-level decisions, documentation of vulnerable patterns, and intervention redesign, not only reassignment of customers.
+
+Methodologically, we extend recursive partitioning to two outcomes \citep{athey2016recursive, wager2018estimation, athey2019grf}. The estimator builds a small set of explicit covariate rules such that segments differ jointly on estimated primary and secondary treatment effects, with optional extra weight on the practical pattern where the primary lifts while the secondary is flat or worsens---the tension managers most often worry about under short-run optimization. The representation stays parsimonious relative to methods that fit a flexible model for each outcome separately and only merge labels afterward.
+
+We benchmark against a two-step analogue of common practice: estimate heterogeneous effects for each outcome, derive segment labels from the two surfaces, and merge them with a classifier \citep{rafieian2025multiobjective}. Simulations show substantially better detection of that focal tension pattern, with far fewer leaves, when contradictions are rare, noise is high, and customer descriptors resemble a single high-cardinality vendor taxonomy. We contribute (i)~a descriptive complement to multi-objective personalization \citep{rafieian2025multiobjective, ascarza2024doingmore}, (ii)~audit-relevant interpretability \citep{chandy2021better, lambrecht2019algorithmic, raji2020_internal_audit}, and (iii)~joint partitioning that foregrounds diagnostically relevant co-movement \citep{kunzel2019metalearners, nie2021quasioracle}. Outputs can also support emerging accountability documentation requirements \citep{dsa2022article34}.
+
+Section~\ref{sec:related} reviews related literature. Section~\ref{sec:framework} presents the framework. Section~\ref{sec:simulation} reports the factorial study. Section~\ref{sec:discussion} discusses implications and limitations.
+
+\section{Related Literature}
+\label{sec:related}
+
+\subsection{Multi-objective personalization and horizons}
+
+A growing literature studies interventions under competing objectives \citep{rafieian2025multiobjective}. Short-run lift metrics are easy to optimize in experiments, while longer-run outcomes are noisier and slower to observe; misalignment can reverse apparent gains when heterogeneity is ignored \citep{ascarza2024doingmore}. Evidence documents segment-level contradictions that disappear in aggregates \citep{anderson2004longrun, hohnhold2015focusing}. Our contribution is diagnostic: we map \emph{where} tradeoffs concentrate instead of estimating an optimal allocation.
+
+\subsection{Accountability and audits}
+
+Algorithmic systems can produce unintended distributional consequences even absent explicit demographic targeting \citep{lambrecht2019algorithmic}. Regulators increasingly require risk assessment and documentation \citep{dsa2022article34}; internal auditing frameworks stress ongoing monitoring \citep{raji2020_internal_audit}. Interpretable segmentations on experimental evidence can complement opaque prescriptive targeting by making localized tensions discussable.
+
+\subsection{Heterogeneous treatment effects}
+
+Causal trees, causal forests, and generalized random forests estimate effect heterogeneity for a single outcome \citep{athey2016recursive, wager2018estimation, athey2019grf}. When analysts have two outcomes, a common workflow estimates each surface separately and merges estimates downstream. That modular design can miss small contradiction segments when each single-outcome signal is too weak to pass model selection. Joint construction reallocates the partitioning objective toward the diagnostic pattern before pruning.
+
+\section{Diagnostic Framework}
+\label{sec:framework}
+
+\subsection{Problem setup}
+
+Consider a randomized experiment with binary treatment $T_i\in\{0,1\}$, pre-treatment covariates $X_i$, and two outcomes $Y_i^A$ (primary) and $Y_i^B$ (secondary, possibly partially observed). Under randomization, within any covariate-defined segment, simple difference-in-means estimators recover conditional average treatment effects $\tau^A(x)$ and $\tau^B(x)$. The sign pattern $(\tau^A,\tau^B)$ partitions the population into four qualitative regions; Region~2 ($\tau^A>0$, $\tau^B\le 0$) is the focal \emph{contradiction} when the firm optimizes the primary but must surface harm on the secondary. The framework extends to more regions of interest and to more than two outcomes in principle; we focus on Region~2 for concreteness.
+
+\subsection{Recursive partitioning}
+
+The procedure grows a binary tree by splitting segments on single covariate thresholds. At each candidate split, primary and secondary treatment effects in each child segment are estimated by difference in means; the chosen split is the one that most increases joint separation on both margins, with optional extra weight on Region~2 (defined above) when analysts want splits to favor that harm-with-lift pattern. Effects are scaled using root-level references so the two outcomes are comparable. After a maximal tree is grown, bottom-up pruning removes weak partitions.
+
+\subsection{Practical properties}
+
+The tree is invariant to monotone transformations of covariates, accommodates mixed types in the usual partitioning sense, and performs implicit variable selection because uninformative features never improve the splitting objective. When $Y^B$ is partially observed, $\hat\tau^B$ is computed on the observed subpopulation inside each candidate segment, mirroring common retention or satisfaction measurement designs.
+
+\section{Simulation Study}
+\label{sec:simulation}
+
+\subsection{Design and data generating process}
+
+We use a region-stratified binary DGP with fixed factorial grids (independent seeds). Covariates are $k\in\{1,3,6,10\}$ categorical variables with one-hot dimension $p{=}30$ (e.g., $k{=}1$ implies 30 levels on one variable; $k{=}10$ implies ten variables with three levels each). \emph{Rareness} sets both the target observation share and combination-type share for Region~2; remaining combination mass is split equally across other regions. Large Cartesian products use a capped pool of combinations for allocation. Treatment effects follow deterministic $\pm 1$ maps by region (intensity $1.0$); i.i.d.\ Gaussian noise with common standard deviation $\sigma$ is added to each observed outcome. Factors include $\sigma\in\{0.01,0.1,1,10\}$, six rareness values from $0.01$ to $0.32$, sample sizes $N\in\{10{,}000,\ldots,320{,}000\}$, and ten replicates per crossed cell ($4{\times}4{\times}6{\times}6{\times}10$ design).
+
+Each replicate is split $60\%/20\%/20\%$ for training, validation, and testing. We fit DivergenceTree for $\lambda\in\{0,1,2,4,8\}$ with Region~2 activation when $\lambda>0$, and two-step benchmarks (separate forests, sign regions, classification tree) tuned for accuracy and for Region~2 recall. Region labels are known only on the test split for evaluation.
+
+\subsection{Aggregate performance}
+
+Table~\ref{tab:method-comparison} reports means over completed simulation rows. Every $\lambda$ configuration dominates both two-step variants on mean Region~2 recall while maintaining higher mean accuracy; trees are far more parsimonious (about 40 versus about 120--140 leaves).
+
+\input{../../tables/table_method_comparison}
+
+\subsection{Heterogeneity, $\lambda$, and vendor taxonomies}
+
+Cell-averaged Region~2 recall gaps favor $\lambda{=}8$ versus the accuracy-tuned two-step benchmark when Region~2 is rare and when noise is high; the gap narrows when Region~2 is abundant. Along rareness slices, $\lambda{=}0$ can outperform large $\lambda$ when contradictions are easy to sample, matching the interpretation of $\lambda$ as a scarcity-sensitive emphasis knob. At $k{=}1$, DivergenceTree recall averages about $0.95$--$0.96$ across $\lambda$ whereas two-step Region~2 recall averages about $0.16$ with very low Region~2 $F_1$, illustrating a failure mode of estimate-then-merge workflows under single high-cardinality segmentations common with third-party data.
+
+Table~\ref{tab:recall-het-by-factor} reports bin means underlying the plots. Figure~\ref{fig:emac-het} shows recall versus rareness, noise, and $N$ for $\lambda{=}8$ versus two-step (tuned). Figure~\ref{fig:emac-mean} summarizes overall method comparison for Region~2 recall.
+
+\input{table_recall_het_emac}
+
+\begin{figure}[t]
+  \centering
+  \begin{subfigure}[b]{0.32\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{../../figures/figurefiles/factor_comparison_rareness_recall_region_2.png}
+    \caption{Rareness}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.32\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{../../figures/figurefiles/factor_comparison_noise_recall_region_2.png}
+    \caption{Noise $\sigma$}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.32\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{../../figures/figurefiles/factor_comparison_data_size_recall_region_2.png}
+    \caption{Sample size $N$}
+  \end{subfigure}
+  \caption{Region~2 recall versus design factors (means pooling other factors). DivergenceTree $\lambda{=}8$ vs.\ two-step (tuned).}
+  \label{fig:emac-het}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.88\textwidth]{../../figures/figurefiles/method_comparison_recall_region_2.png}
+  \caption{Overall simulation averages: Region~2 recall by method (error bars reflect Monte Carlo variability in the plot routine).}
+  \label{fig:emac-mean}
+\end{figure}
+
+\subsection{Sparsity across $k$}
+
+Figure~\ref{fig:emac-sparse} traces Region~2 recall across $k\in\{1,3,6,10\}$. At $k{=}1$, the joint method maintains very high recall for every $\lambda$ curve, whereas the two-step benchmarks remain near the bottom of the plot. As $k$ increases, the latent combination space expands and all methods lose recall; at $k{=}10$ the two-step variants can partially close the gap in the plotted bin averages. This pattern underscores that the relative advantage of joint construction is largest in low-dimensional categorical representations typical of vendor segmentations, while high-$k$ designs stress every estimator.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.88\textwidth]{../../figures/figurefiles/factor_comparison_sparsity_recall_region_2.png}
+  \caption{Region~2 recall versus sparsity $k$ (number of categorical variables) with other factors averaged in each bin.}
+  \label{fig:emac-sparse}
+\end{figure}
+
+\subsection{Co-movement emphasis across $\lambda$}
+
+Within DivergenceTree, increasing $\lambda$ raises mean Region~2 recall from about $0.39$ to about $0.43$ in Table~\ref{tab:method-comparison} while lowering mean accuracy slightly from about $0.52$ to about $0.51$, reflecting the intended accuracy--recall trade-off. Slicing the factorial summaries by rareness shows when Region~2 is scarce ($0.01$ share), $\lambda{=}8$ attains Region~2 recall about $0.36$ versus about $0.28$ for $\lambda{=}0$; when Region~2 is abundant ($0.32$), the ordering reverses ($\lambda{=}0$ about $0.78$ recall versus about $0.72$ for $\lambda{=}8$, with higher accuracy for $\lambda{=}0$). Analysts who expect contradictions to be rare should therefore lean toward larger $\lambda$; analysts who expect contradictions to be widespread can keep $\lambda{=}0$. Moderate values ($\lambda\in\{2,4\}$) retain most of the recall gain with a smaller accuracy cost in the same table.
+
+\subsection{Computational cost}
+
+The two-step method fits two tuned outcome models and a tuned label merger per replicate; wall-clock times are orders of magnitude larger on average than DivergenceTree in the logged simulation outputs, with high variance across cells. For large-scale audit grids, the joint tree is attractive not only statistically but also as a lighter repeatable screen before committing to heavier benchmarks.
+
+\section{Discussion}
+\label{sec:discussion}
+
+The framework is descriptive: it turns experimental evidence into explicit segment rules for learning and accountability, complementing prescriptive personalization \citep{rafieian2025multiobjective}. Outputs can support documentation of localized harms alongside aggregate guardrails and connect to emerging platform obligations \citep{dsa2022article34}.
+
+The simulation mirrors a transparent factorial stress test; practitioners should view absolute performance levels as calibration-dependent. Nonetheless, the recurring ordering---joint tree ahead on Region~2 recall with fewer leaves, two-step deteriorating sharply under noise and when many levels load on a single descriptor field---is stable across the wide grid we evaluate. Reproducibility is supported by fixed seeds, archived configuration files, and aggregated result tables in the repository.
+
+Limitations include the two-outcome focus in this submission, reliance on randomization in the baseline, and analyst choices about which tension patterns to emphasize when growing trees. Extensions include additional outcomes, observational variants with doubly robust or propensity-adjusted splitting, and coupling diagnostics to constrained re-optimization after diagnosis.
+
+\bibliographystyle{apalike}
+\bibliography{../../ref}
+
+\end{document}

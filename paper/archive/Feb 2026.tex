@@ -1,0 +1,791 @@
+\documentclass[11pt,letterpaper,english]{article}
+\usepackage{microtype}
+\usepackage{titling}
+\usepackage{amsmath} 
+\usepackage{amsthm}
+\usepackage{mathrsfs}
+\usepackage{caption}
+\usepackage{bibunits}
+\usepackage{fontawesome}
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage{subcaption}
+\usepackage{setspace}
+\usepackage{amssymb}
+\usepackage{multirow}
+\usepackage{rotating}
+\usepackage{array}
+\usepackage{multibib}
+\usepackage{blindtext}
+\usepackage{mathtools}
+\usepackage{siunitx}
+\usepackage{colortbl}
+\usepackage{float}
+\usepackage[flushleft]{threeparttable}
+\usepackage{algorithm}
+\usepackage{multirow, makecell}
+\makeatletter
+\renewcommand{\ALG@name}{Pseudo-code}
+\makeatother
+\usepackage{algorithmic}
+\usepackage{xr}
+\usepackage{color}
+%\externaldocument{appendix_jan1}
+\DeclareMathAlphabet{\mathcalligra}{T1}{calligra}{m}{n}
+\newcommand{\Var}{\mathrm{Var}}
+\DeclareMathOperator{\E}{\mathbb{E}}
+\DeclareMathOperator{\Tr}{Tr}
+\usepackage[sectionbib,round]{natbib}
+\setlength{\bibsep}{0.0pt}
+\setlength{\footskip}{30pt}
+\newtheorem{propn}{Proposition}\newtheorem{lemm}{Lemma}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\onehalfspacing
+\usepackage{times}
+\usepackage[small,compact]{titlesec} 
+\usepackage{abstract}
+\renewcommand{\abstractnamefont}{\normalfont\bfseries}
+\renewcommand{\abstracttextfont}{\normalfont}
+\usepackage[hang,flushmargin]{footmisc}
+\usepackage{fullpage} 
+\usepackage{hyperref}
+\usepackage[compact]{titlesec}
+\usepackage[section]{placeins}
+\usepackage{footnote}
+\usepackage{epstopdf}
+\usepackage{placeins}
+\usepackage[toc,page]{appendix}
+\usepackage{blkarray}
+\usepackage{stackengine}
+\usepackage{accents}
+\usepackage{enumitem}
+\usepackage[mathscr]{euscript}
+\usepackage{booktabs}  
+\usepackage{nicefrac}
+\usepackage{longtable}
+
+\newcommand\norm[1]{\left\lVert#1\right\rVert}
+
+\newtheorem{definition}{Definition}[section]
+\newcommand*\mean[1]{\bar{#1}}
+%\theoremstyle{definition}
+%\newtheorem{defn}{Definition}
+
+\usepackage[utf8]{inputenc}
+\usepackage{longtable}
+\usepackage{graphicx}
+\usepackage{epstopdf}
+\DeclareGraphicsRule{.tif}{png}{.png}{`convert #1 `dirname #1`/`basename #1 .tif`.png}
+\usepackage{bbm}
+\usepackage{dsfont}
+\usepackage{comment}
+\usepackage{pgfplots}
+
+\newcommand{\squishlist}{
+   \begin{list}{$\bullet$}
+    { \setlength{\itemsep}{0pt} \setlength{\parsep}{1pt}
+      \setlength{\topsep}{1pt} \setlength{\partopsep}{1pt}
+      \setlength{\leftmargin}{1.5em} \setlength{\labelwidth}{1em}
+      \setlength{\labelsep}{0.5em} } }
+
+\newcommand{\squishlisttwo}{
+   \begin{list}{$\bullet$}
+    { \setlength{\itemsep}{0pt} \setlength{\parsep}{0pt}
+      \setlength{\topsep}{0pt} \setlength{\partopsep}{0pt}
+      \setlength{\leftmargin}{1em} \setlength{\labelwidth}{1.5em}
+      \setlength{\labelsep}{0.5em} } }
+
+\theoremstyle{definition}
+\newtheorem{assum}{Assumption}
+
+\newcommand{\todo}[1]{\textcolor{blue}{#1}}
+
+\theoremstyle{definition}
+\newtheorem{defn}{Definition}
+
+\newcommand{\squishend}{
+    \end{list}  }
+
+\newcommand{\ebi}[1]{\noindent{\textcolor{blue}{\{{\bf Ebrahim:}  #1\}}}}
+\newcommand{\hema}[1]{\noindent{\textcolor{green}{\{{\bf Hema:}  #1\}}}}
+
+\defaultbibliographystyle{abbrvnat} 
+\defaultbibliography{ref} 
+
+\begin{document}
+\title{A Consumer-Centric Auditing Algorithm for Designing Win–Win Marketing Intervention Policies}
+
+
+\author{
+       Ebrahim Barzegary \\ %\thanks{}  \\
+        ESSEC Business school\\
+        %\and
+       %Hema Yoganarasimhan\footnotemark[1]\\
+        %University of Washington
+ }
+
+\thispagestyle{empty}
+
+\date{}
+\maketitle
+
+\begin{abstract} 
+
+Marketing interventions—such as free trial designs, advertising messages, pricing schemes, and recommendation policies—are increasingly selected through continuous A/B testing and experimentation to maximize firm objectives. Yet the downstream effects of these optimized interventions on consumers, and in many settings on society and the planet, are often neglected. In response, policymakers have begun to introduce regulations such as the European Union’s Digital Services Act (DSA) to strengthen consumer protection and platform accountability. However, practical enforcement remains challenging because harm is difficult to define operationally and because marketing policies are constantly updated through ongoing optimization.
+
+We propose a method to \emph{audit} firm-optimized marketing interventions using the same randomized A/B testing data that firms already generate. Our approach extends recursive partitioning to a two-outcome setting and segments consumers based on the joint treatment-effect pattern on (i) a firm-side outcome (e.g., conversion or revenue) and (ii) a consumer-side outcome (e.g., usage, satisfaction, retention, or regret). The algorithm is designed to surface interpretable segments where firm gains coincide with consumer losses—whether the divergence arises from negative causal effects on consumer outcomes, from selection induced by the intervention, or from a combination of both. By turning otherwise implicit trade-offs into measurable, segment-level diagnostics, the method provides a practical tool for responsible personalization, internal governance, and empirical research on when marketing optimization helps versus harms.
+
+
+
+\vspace{5mm}
+
+\noindent \textbf{Keywords:} marketing optimization, algorithmic auditing, responsible personalization, consumer well-being, recursive partitioning, multi-objective optimization 
+
+\end{abstract}
+
+
+\begin{bibunit}
+\newpage
+\section{Introduction}
+\label{sec:intro}
+
+Marketing has long been defined by its customer-centric philosophy of mutual value creation. The American Marketing Association’s definition emphasizes that marketing creates and delivers value for customers while benefiting the organization and its stakeholders \citep{ama2017definition}. In other words, companies succeed by identifying consumer needs and satisfying them in ways that also advance the firm’s goals. \citep{armstrong2014principles} similarly describe marketing as the process of creating value for customers in order to capture value from customers in return. This perspective reflects marketing’s original promise: firms prosper by serving consumers well, and consumers in turn gain products or services that improve their welfare. Under this traditional marketing concept, value creation is inherently mutual—a “win–win” where meeting customer needs leads to business success. This philosophy underpins initiatives such as \textit{Better Marketing for a Better World}, which call on the discipline to address long-term consequences of marketing strategies and not just short-term gains \citep{chandy2021better}.
+
+In practice, however, the operational focus of modern marketing has increasingly shifted toward optimizing a narrow set of firm-side metrics—such as clicks, views, retention, and conversion—often with limited attention to how these interventions affect consumers beyond the immediate transaction. This shift is closely tied to the rise of systematic experimentation. Digital platforms now rely on continuous A/B testing to refine prices, messages, interfaces, recommendation policies, and free trial designs. These tools have enabled disciplined, data-driven decision-making and have delivered substantial gains in efficiency and profitability. Large platforms such as Amazon, Google, Facebook, and Booking.com conduct upwards of 10,000 online experiments annually \citep{kohavi2020trustworthy}. Yet the same tools also encourage a form of optimization in which what is easy to measure becomes what is optimized. Consumer-side outcomes—such as satisfaction, regret, long-term engagement, or well-being—are rarely incorporated directly into the objective function and are often evaluated, if at all, only at an aggregate level. As a result, systematic optimization may generate harms that remain invisible, particularly when firm gains are concentrated while consumer losses are localized to specific segments \citep{bar2023algorithmic}.
+
+The risk of such unseen harm is likely to intensify with the growing use of generative artificial intelligence in marketing. Advances in large language models have dramatically reduced the cost of producing and iterating persuasive content, enabling algorithms that continuously generate, test, and refine messages based on observed performance. These systems can personalize content at unprecedented scale and speed, tuning interventions toward whatever maximizes firm-side outcomes. While this capability offers clear benefits, it also raises the possibility that optimization increasingly exploits psychological vulnerabilities, disproportionately affects sensitive groups, or undermines long-term consumer trust—without mechanisms in place to detect or diagnose these effects \citep{helberger2020choice}.
+
+Against this backdrop, policymakers have begun to emphasize accountability and consumer protection in algorithmic decision-making. Regulations such as the European Union’s Digital Services Act highlight the need for firms to monitor and mitigate harmful consequences of digital interventions \citep{dsa2022article34}. However, enforcement and internal governance remain challenging in practice. Harm is difficult to define operationally, and marketing policies are not static objects that can be audited once, but adaptive systems that evolve through constant re-optimization.
+
+In this paper, we propose a method to \emph{audit} firm-optimized marketing interventions using the same randomized A/B testing data that firms already generate. Rather than introducing a new optimization or targeting algorithm, our goal is diagnostic. We extend recursive partitioning to a two-outcome setting in which treatment effects on a firm-side outcome (such as conversion or revenue) and a consumer-side outcome (such as usage, satisfaction, retention, or regret) are jointly taken into account. The algorithm recursively segments consumers based on observable pre-treatment characteristics and evaluates candidate splits according to whether they reveal meaningful heterogeneity in \emph{both} outcomes, thereby focusing segmentation on structural trade-offs rather than predictive performance for a single metric. To guide the audit toward substantively relevant cases, we introduce an additional component that allows the partitioning to emphasize specific patterns of outcome interplay—such as win--win, win--lose, lose--win, or lose--lose—depending on the auditing objective.
+
+While the method is general and applicable to any setting involving two potentially competing outcomes—for example, short-term purchase versus long-term retention—this paper focuses on the case in which firm-side gains coincide with consumer-side losses. Such divergence may arise either from negative treatment effects on consumer outcomes or from selection effects induced by the intervention, and our framework is designed to detect both. By making these trade-offs measurable at an interpretable, segment level, the proposed approach provides a practical tool for responsible personalization, internal auditing, and empirical research on when marketing optimization aligns with, or departs from, marketing’s original promise of shared value creation.
+
+\section{Related Literature}
+\label{sec:related_lit}
+
+Our work relates to four intersecting literatures. First, it contributes to research on marketing optimization, experimentation, and personalization by shifting the focus from designing firm-optimal policies to auditing their downstream consequences for consumers. Second, it adds to the growing literature on consumer welfare in marketing—particularly beyond pricing—by introducing a segment-level, data-driven diagnostic for identifying welfare divergence. Third, it connects to work on fairness, harmful choice architecture, and regulatory accountability, which motivates the need for transparent auditing tools under continuous optimization. Finally, it contributes methodologically to recursive partitioning and heterogeneous treatment effect (HTE) estimation by extending tree-based segmentation to a two-outcome setting that explicitly targets outcome interplay.
+
+\subsection{Optimization, experimentation, and personalization}
+A central theme in marketing analytics is the use of experimentation and data-driven learning to optimize firm-side outcomes such as conversion, engagement, and customer lifetime value. A/B testing remains a core tool for evaluating marketing interventions, and a large literature studies how firms can improve decisions through targeting, machine learning, and adaptive experimentation. Recent advances further integrate large language models into this process, enabling rapid generation, testing, and refinement of persuasive content at low marginal cost. For example, \citet{ye2025lola} introduce an LLM-assisted online learning framework that continuously experiments on generated content to optimize engagement outcomes. Related work in adaptive policy testing highlights how firms can efficiently identify superior strategies through experimentation \citep{simester2020targeting}. These developments illustrate how firms are increasingly able to personalize marketing at scale, tailoring actions to individual users through ongoing optimization.
+
+While this stream emphasizes policy learning and algorithmic targeting to improve firm metrics, our work complements it by offering an auditing framework. Rather than proposing new personalization algorithms, we use the same randomized experimental data to diagnose where optimized policies may create misalignment between firm and consumer outcomes. This distinction is particularly important as personalization expands to multi-objective contexts. For example, \citet{rafieian2025multiobjective} propose a multi-objective personalization approach that balances conflicting outcomes such as ad exposure and content consumption. Their work shows that single-objective targeting can backfire for certain users, and that segment-specific trade-offs are often necessary. Our framework adds a diagnostic lens to this line of inquiry by identifying where those trade-offs emerge empirically, without requiring full policy redesign.
+
+\subsection{Consumer welfare and the consequences of personalization}
+A growing literature in marketing examines how firm interventions affect consumer welfare. Much of this work has focused on pricing, including the welfare implications of price discrimination and targeted pricing policies, typically using structural demand models and welfare accounting (e.g., \citealp{petrin2002quantifying, leslie2004price, chintagunta2003balancing}). More recent research studies personalized pricing in digital markets and shows that while personalization can increase firm profits, its effect on consumer surplus depends critically on preference distributions and market power \citep{dube2023personalized}.
+
+Beyond pricing, a newer stream examines non-price interventions such as recommendation algorithms and platform rankings. \citet{ursu2018power} show that rankings can reduce search costs and improve match quality, increasing consumer welfare. Subsequent work finds that even profit-aware personalization can enhance consumer surplus in some settings \citep{donnelly2024welfare}, while other studies demonstrate that equilibrium responses—such as seller pricing—can reverse these gains \citep{zhou2023competing, kaye2024personalization}. \citet{sun2013ad} and \citet{tuchman2018television} examine how advertising-based monetization strategies influence content and consumer behavior. While \citet{sun2013ad} find that bloggers shift toward mass-appeal topics after adopting ads—with no drop in content quality—\citet{tuchman2018television} show that excessive ad load can prompt ad-skipping and reduce viewer engagement. Together, these findings highlight a nuanced trade-off between monetization and sustained consumer value. \citet{ascarza2018retention} also shows that targeting high-risk churners may backfire if response heterogeneity is ignored, and that uplift-based targeting improves outcomes for both firms and consumers.
+
+Our contribution to this literature is diagnostic and segment-level. Rather than estimating average welfare effects or optimizing counterfactual policies, we provide a nonparametric method that identifies heterogeneous alignment or divergence between firm and consumer outcomes using randomized experimental data. This is particularly valuable in settings where harms are concentrated in specific subpopulations and may be obscured by average effects. Our method also complements recent multi-objective evaluation frameworks, such as \citet{goli2025personalizing}, which quantify trade-offs between profit and consumer utility in personalized ad-load assignments.
+
+\subsection{Fairness, harmful choice architecture, and accountability}
+A complementary literature emphasizes that digital choice architecture can be designed to steer consumers toward actions they might not otherwise take, raising concerns about manipulation, regret, and vulnerability. Empirical work shows that so-called ``dark patterns'' can meaningfully influence consumer decisions \citep{luguri2021shining}. Related policy and consumer-protection research highlights that such practices are often refined through iterative interface experimentation, including A/B testing, making harms difficult to detect ex ante and motivating the need for ongoing auditing rather than one-time evaluation. These behavioral risks are particularly salient as optimization algorithms are deployed to maximize short-term metrics without evaluating longer-term consequences.
+
+In parallel, research on algorithmic fairness and explainability shows that personalization systems can systematically disadvantage certain groups and lack transparency \citep{lambrecht2019algorithmic, rai2020explainable}. \citet{lambrecht2019algorithmic} show that an advertising algorithm optimized for engagement systematically underrepresented women in STEM job ads due to economic targeting criteria, despite no explicit gender variables. Our approach complements this literature by providing a general auditing tool that can surface harmful segments defined not only by demographics but also by behavioral traits or contextual signals, which are common channels through which marketing interventions may generate unintended harm. In this sense, our work supports emerging efforts to embed accountability and fairness principles into data-driven marketing.
+
+\subsection{Recursive partitioning and heterogeneous treatment effects with multiple outcomes}
+Finally, our paper contributes to the methodological literature on heterogeneous treatment effect estimation and tree-based segmentation. Recursive partitioning methods such as causal trees \citep{athey2016recursive}, causal forests \citep{wager2018estimation}, and generalized random forests \citep{athey2019grf} provide flexible, nonparametric tools for detecting treatment effect heterogeneity for a single outcome. These methods are increasingly used in marketing to identify which segments respond best to promotions, recommendations, or price changes. For instance, \citet{ascarza2018retention} uses uplift modeling logic to segment churn-prone users by responsiveness to retention offers. Extensions such as RePaD \citep{barzegary2022recursive} demonstrate how problem-specific splitting rules can adapt recursive partitioning to dynamic decision problems.
+
+We build on this tradition by extending recursive partitioning to a two-outcome setting and introducing a joint splitting criterion that explicitly targets the interplay between firm-side and consumer-side treatment effects. Our method incorporates a configurable region-weighting term that allows practitioners to emphasize particular zones of interest (e.g., firm win–consumer loss). This distinguishes our work from standard HTE methods that prioritize predictive accuracy or heterogeneity in a single outcome. Instead, we provide an interpretable segmentation framework that surfaces when firm-optimized interventions produce unintended consumer consequences. In doing so, the method offers a tailored tool for auditing marketing policies, enabling internal monitoring, regulatory compliance, and responsible personalization at scale.
+
+\section{Modeling Framework and Problem Setup}
+\label{sec:app}
+
+\subsection{Marketing Intervention and Post-Treatment Behavior}
+
+We consider a common marketing setting in which firms conduct randomized experiments (e.g., A/B tests) to evaluate alternative marketing interventions. Let $T_i \in \{0,1\}$ denote the treatment assigned to individual $i$, where $T_i=0$ represents the control condition and $T_i=1$ represents the active intervention (e.g., a short free trial, an urgency message, or a personalized promotion). Each individual is characterized by a vector of observed pre-treatment covariates $X_i \in \mathcal{X}$, such as demographics, browsing behavior, or prior usage history.
+
+For each individual, we observe two post-treatment outcomes:
+\begin{itemize}
+    \item A \emph{firm-side outcome} $Y_i^F$, capturing firm-relevant performance metrics such as conversion, subscription, purchase behavior, or revenue.
+    \item A \emph{consumer-side outcome} $Y_i^C$, capturing post-treatment consumer outcomes such as product usage, satisfaction, retention, returns, or well-being.
+\end{itemize}
+
+The outcomes $Y_i^F$ and $Y_i^C$ may be binary, continuous, or discrete, and the framework does not impose distributional restrictions on their support. In many applications, both outcomes are directly observed for all individuals. In other settings, consumer-side outcomes may be partially observed due to post-treatment behavior (e.g., satisfaction observed only for retained users). The proposed method accommodates both cases and allows for estimation of consumer-side effects under conditional observability, provided sufficient information is available within segments.
+
+We adopt the potential outcomes framework. Let $Y_i^F(t)$ and $Y_i^C(t)$ denote the potential firm-side and consumer-side outcomes for individual $i$ under treatment $t \in \{0,1\}$. Due to the fundamental problem of causal inference, we observe only the outcomes corresponding to the realized treatment $T_i$. We assume treatment is randomly assigned:
+\[
+T_i \perp\!\!\!\perp \{Y_i^F(0), Y_i^F(1), Y_i^C(0), Y_i^C(1)\} \mid X_i.
+\]
+
+\subsection{Objective and Formal Problem Definition}
+\label{ssec:setting}
+
+Our objective is not to optimize treatment assignment, but to \emph{audit} firm-optimized interventions by identifying subpopulations that exhibit systematically different joint responses in firm-side and consumer-side outcomes. Marketing interventions often generate heterogeneous effects across individuals, and the same policy may produce mutually beneficial outcomes for some subpopulations while generating trade-offs or harm for others. The goal of the framework is to uncover such heterogeneity and make these patterns explicit.
+
+Let $\tau^F(x)$ and $\tau^C(x)$ denote the conditional average treatment effects for individuals with covariates $X_i = x$:
+\[
+\tau^F(x) = \mathbb{E}[Y_i^F(1) - Y_i^F(0) \mid X_i = x], \qquad
+\tau^C(x) = \mathbb{E}[Y_i^C(1) - Y_i^C(0) \mid X_i = x].
+\]
+
+In some applications, consumer-side outcomes may only be observable for a subset of individuals (e.g., conditional on retention or engagement). In such cases, $\tau^C(x)$ is interpreted as a conditional treatment effect and is estimated using the corresponding observable subpopulation. The proposed method accommodates both fully observed and partially observed consumer outcomes by enforcing minimum support conditions within segments to ensure stable estimation.
+
+Each subpopulation can be characterized by the sign and magnitude of $(\tau^F(x), \tau^C(x))$, giving rise to qualitatively different joint outcome patterns. For example, a segment with $\tau^F(x) > 0$ and $\tau^C(x) < 0$ corresponds to a setting in which the intervention improves firm-side performance while reducing consumer outcomes, whereas a segment with both effects positive reflects a mutually beneficial intervention. Other segments may experience uniformly negative effects or exhibit weaker responses on one dimension relative to the other.
+
+Let $\mathcal{D} = \{(X_i, T_i, Y_i^F, Y_i^C)\}_{i=1}^n$ denote data from a randomized experiment. Our goal is to partition the covariate space $\mathcal{X}$ into $L$ disjoint and interpretable segments $\mathcal{S} = \{S_1, \dots, S_L\}$ such that treatment effects are approximately homogeneous within each segment. For a given segment $S_\ell$, we define:
+\[
+\tau^F(S_\ell) = \mathbb{E}[Y^F(1) - Y^F(0) \mid X \in S_\ell], \qquad
+\tau^C(S_\ell) = \mathbb{E}[Y^C(1) - Y^C(0) \mid X \in S_\ell].
+\]
+
+The objective of the algorithm is to construct segmentations that reveal meaningful variation in joint firm--consumer treatment effects across segments while maintaining stability within segments. By making these joint outcome patterns explicit, the framework enables firms, researchers, and regulators to systematically audit how optimized interventions distribute benefits and costs across different subpopulations, rather than relying solely on aggregate treatment effects.
+
+
+\section{Algorithmic Framework: Recursive Partitioning for Joint Outcome Analysis}
+
+This section introduces the algorithmic framework that operationalizes the auditing objective defined in the modeling section. The goal of the algorithm is to construct interpretable customer segments in which marketing interventions exhibit heterogeneous \emph{joint} effects on firm-side and consumer-side outcomes, and to prioritize segments corresponding to outcome patterns of substantive interest.
+
+\subsection{Segmentation via Recursive Partitioning}
+\label{ssec:recur_part}
+
+Recursive partitioning is a general-purpose meta-algorithm for dividing a covariate space into disjoint, interpretable segments by recursively applying axis-aligned splits. At each iteration, the algorithm considers candidate splits that divide an existing segment along a threshold of a single covariate, evaluates their contribution to a predefined objective function, and selects the split that yields the largest improvement. The process continues until a stopping criterion is met.
+
+Formally, the procedure operates as follows:
+\begin{itemize}
+    \item \emph{Input}: An objective function $\mathcal{F}(\Pi)$ that evaluates a partitioning $\Pi$ of the covariate space.
+    \item \emph{Initialization}: Start with an initial partition $\Pi_0$ consisting of the entire sample.
+    \item \emph{Iteration}: For iteration $r=0,1,\dots$,
+    \begin{itemize}
+        \item For each current segment $\pi \in \Pi_r$, for each covariate $x \in \mathcal{X}$, and for each candidate threshold $v$ in the support of $x$ within $\pi$, compute the gain
+        \[
+        \Delta(\pi,x,v) = \mathcal{F}(\Pi_r + \{\pi,x,v\}) - \mathcal{F}(\Pi_r).
+        \]
+        \item Select the split $(\pi^*,x^*,v^*)$ that maximizes $\Delta(\pi,x,v)$.
+        \item Update the partition $\Pi_{r+1} = \Pi_r + \{\pi^*,x^*,v^*\}$.
+    \end{itemize}
+\end{itemize}
+
+The index $r$ denotes the iteration number, and $\Pi_r$ represents the partition after $r$ splits.
+
+\subsection{Joint Splitting Criterion}
+\label{sec:spliting_criterion}
+
+The central contribution of the algorithm lies in the construction of a splitting criterion that jointly evaluates heterogeneity in firm-side and consumer-side treatment effects. Standard heterogeneous treatment effect methods typically optimize splits with respect to a single outcome. In contrast, our objective is to identify splits that simultaneously differentiate treatment effects on both outcomes, thereby revealing segments with distinct joint outcome patterns.
+
+\vspace{5mm}
+\noindent
+\emph{Segment-level treatment effect estimation.}
+
+For any segment $S \subset \mathcal{X}$, we estimate segment-level treatment effects using training data:
+\[
+\hat{\tau}^F(S) = \frac{1}{|S|} \sum_{i \in S} \big[ \hat{Y}^F_i(1) - \hat{Y}^F_i(0) \big], \qquad
+\hat{\tau}^C(S) = \frac{1}{|S_C|} \sum_{i \in S_C} \big[ \hat{Y}^C_i(1) - \hat{Y}^C_i(0) \big],
+\]
+where $S_C$ denotes the subset of observations in $S$ for which the consumer-side outcome is observed. The estimators $\hat{Y}^F_i(t)$ and $\hat{Y}^C_i(t)$ are computed as within-segment sample means under treatment $t \in \{0,1\}$, exploiting random assignment for unbiased estimation.
+
+Given a candidate split of a segment $S$ into two child segments $S_L$ and $S_R$, the gain from the split is defined as
+\[
+\Delta(S_L,S_R)
+=
+\sum_{j \in \{L,R\}} w_j \cdot g\!\left( \hat{\tau}^F(S_j), \hat{\tau}^C(S_j) \right),
+\]
+where $w_j = |S_j|/|S|$ and $g(\cdot,\cdot)$ is a joint heterogeneity function.
+
+We define
+\[
+g(\tau^F,\tau^C)
+=
+\left( \frac{\tau^F - \bar{\tau}^F}{\sigma_F} \right)^2
++
+\left( \frac{\tau^C - \bar{\tau}^C}{\sigma_C} \right)^2
++
+\lambda \cdot w_{\text{region}}
+\left|
+\frac{(\tau^F - \bar{\tau}^F)(\tau^C - \bar{\tau}^C)}{\sigma_F \sigma_C}
+\right|,
+\]
+where $\bar{\tau}^F$ and $\bar{\tau}^C$ are root-level treatment effects computed on the full training sample, $(\sigma_F,\sigma_C)$ are the corresponding root-level standard errors, $\lambda \ge 0$ controls the strength of the joint deviation term, and $w_{\text{region}} \in \{0,1\}$ is a region-specific \emph{activator} that determines whether the co-movement component is active.
+
+
+Normalization by root-level standard errors anchors the splitting criterion to a global reference scale. This choice rewards splits that uncover substantively meaningful deviations from the overall policy effect and prevents depth-dependent rescaling that could otherwise amplify local noise. While alternative normalizations are possible, root-level normalization is well aligned with the diagnostic and auditing goals of the method.
+
+After each candidate split, each resulting segment is assigned to a region based on the signs of its estimated treatment effects $(\hat{\tau}^F,\hat{\tau}^C)$. The analyst specifies a set of regions of interest $\mathcal{R}_{\text{interest}} \subseteq \{1,2,3,4\}$, and the $w_{\text{region}}$ equals one if the segment belongs to one of these regions and zero otherwise.
+
+The co-movement term uses an absolute value to measure the \emph{strength} of joint deviation between firm and consumer effects, while the direction of the effects is governed entirely by region membership. This separation allows the algorithm to prioritize segments exhibiting outcome patterns of interest without conflating magnitude with sign.
+
+
+By construction, splits that generate heterogeneity in only one outcome receive lower gain than splits that jointly differentiate firm and consumer responses within regions of interest. This ensures that the resulting segmentation reflects joint outcome structure rather than isolated variation in a single metric.
+
+The splitting criterion is designed for tree construction and is not used for model selection.
+
+\subsection{Model Selection and Cross-Validation}
+\label{sec:model-selection}
+
+While the joint splitting criterion governs how the tree is grown, it is not designed for selecting hyperparameters such as maximum tree depth or minimum leaf size. The splitting objective deliberately emphasizes within-sample heterogeneity in joint outcomes and may therefore favor overly complex trees in finite samples. To mitigate overfitting, we decouple tree construction from model selection and adopt a cross-validation strategy based on pseudo-outcomes \citep{wager2018estimation}.
+
+The pseudo-outcome approach transforms the causal estimation problem into a supervised prediction problem whose expected loss is minimized when treatment effects are estimated accurately. Under randomized assignment with equal treatment probability, the pseudo-outcomes for individual $i$ are defined as
+\[
+\tilde{Y}^F_i = (2T_i - 1) Y^F_i, \qquad
+\tilde{Y}^C_i = (2T_i - 1) Y^C_i,
+\]
+where the transformation $(2T_i - 1)$ maps the treatment indicator from $\{0,1\}$ to $\{-1,1\}$. Under randomization, the conditional expectation of each pseudo-outcome is proportional to the corresponding treatment effect.
+
+For a given hyperparameter configuration, we perform $K$-fold cross-validation. In each fold, the tree is trained on the training folds using the joint splitting criterion, and predicted segment-level treatment effects $(\hat{\tau}^F_i, \hat{\tau}^C_i)$ are obtained for observations in the validation fold. Model performance is then evaluated using mean squared error on pseudo-outcomes:
+\[
+\mathcal{L}_k
+=
+\frac{1}{n_{\text{val},k}} \sum_{i \in \text{val}_k}
+\left( \tilde{Y}^F_i - \frac{1}{2}\hat{\tau}^F_i \right)^2
++
+\frac{1}{n_{\text{val},k}^C} \sum_{i \in \text{val}_k : Y_i^C \text{ observed}}
+\left( \tilde{Y}^C_i - \frac{1}{2}\hat{\tau}^C_i \right)^2,
+\]
+where $n_{\text{val},k}$ is the number of observations in validation fold $k$, and $n_{\text{val},k}^C$ is the number of observations with observed consumer outcomes in that fold. The factor $1/2$ aligns the pseudo-outcomes with the treatment-effect parameterization under equal-probability randomization.
+
+Hyperparameters are selected to minimize the average validation loss across folds. This selection criterion favors trees that produce stable and generalizable estimates of both firm-side and consumer-side treatment effects, while remaining agnostic to the region-activation structure used during tree construction.
+
+
+\subsection{Algorithm Properties and Use Case}
+
+The proposed algorithm is designed to (i) uncover heterogeneous joint treatment effects on firm and consumer outcomes, (ii) produce interpretable, rule-based segments, and (iii) allow analysts to prioritize specific outcome patterns through region-based weighting. Unlike approaches that estimate individual-level treatment effects and cluster ex post, the method integrates estimation and segmentation, accounts for estimation uncertainty during tree growth, and yields transparent segments suitable for auditing optimized marketing policies.
+
+In the next section, we evaluate the behavior of the algorithm through a simulation study.
+
+\section{Simulation Study}
+\label{sec:simulation1}
+
+We evaluate the proposed algorithm using a controlled simulation designed to assess its statistical behavior and diagnostic properties across a wide range of data environments. The purpose of this simulation is not to approximate any specific market or behavioral setting, but to provide a systematic stress test of the algorithm under conditions that vary in structural complexity, signal strength, sample size, and alignment between firm-side and consumer-side treatment effects.
+
+The simulation is constructed to isolate the role of the co-movement emphasis parameter $\lambda$. By varying key properties of the data—such as sparsity, noise, prevalence of positive treatment effects, and overlap between firm and consumer signals—we examine how prioritizing specific joint outcome patterns affects the algorithm’s ability to detect regions of interest. This design allows us to characterize the trade-offs between overall accuracy and targeted recall that are central to auditing applications.
+
+\subsection{Binary Data Generating Process}
+\label{sec:binary-dgp}
+
+We generate data using an abstract binary data generating process that provides explicit control over the structure of treatment effect heterogeneity. The process is fully specified and non-behavioral, allowing us to manipulate the statistical properties of the data independently of economic or psychological assumptions.
+
+\textbf{Feature construction.}
+Each observation is characterized by $k$ categorical variables, where categorical variable $j$ has $n_j$ possible categories. Each observation belongs to exactly one category per variable. All categorical variables are one-hot encoded, producing a binary feature vector $X \in \{0,1\}^p$, where
+\[
+p = \sum_{j=1}^k n_j.
+\]
+Each observation therefore has exactly $k$ active features and $p-k$ inactive features.
+
+To ensure comparability across simulation runs, the total number of features is fixed at $p=60$. This is achieved by setting
+\[
+n_j = 60 / k \quad \text{for all } j,
+\]
+so that increasing $k$ increases sparsity and the depth of interactions required to isolate specific feature combinations, without changing overall dimensionality.
+
+\vspace{6pt}
+\noindent
+\textbf{Baseline outcomes.}
+Baseline firm-side and consumer-side outcomes are generated as linear functions of the binary features:
+\[
+\mu^F(X) = X^\top \beta^F, \qquad \mu^C(X) = X^\top \beta^C,
+\]
+where $\beta^F$ and $\beta^C$ are vectors of randomly drawn coefficients. These baseline components are independent of treatment assignment and do not induce heterogeneity in treatment effects.
+
+\vspace{6pt}
+\noindent
+\textbf{Treatment effect structure.}
+Treatment effect heterogeneity is introduced through \emph{activating feature combinations}. Let $\mathcal{C}$ denote the set of all possible category combinations implied by the $k$ categorical variables. From this set, we randomly select:
+\begin{itemize}
+    \item $m_F$ activating combinations for the firm outcome,
+    \item $m_C$ activating combinations for the consumer outcome,
+\end{itemize}
+where $m_F = m_C$ defines the \emph{complexity} of the data generating process and ranges between 1 and 30. Higher values of complexity correspond to a larger number of distinct feature combinations that induce positive treatment effects, requiring more complex tree structures to recover.
+
+The degree of overlap between the firm and consumer activating sets is governed by the \emph{covariance between firm and consumer signals}. Specifically, a fraction $\rho \in [0,1]$ of the consumer activating combinations are shared with the firm activating combinations. When $\rho = 0$, activating combinations are disjoint; when $\rho = 1$, the two sets coincide.
+
+For any observation with feature vector $X$, treatment effects are defined as
+\[
+\tau^F(X) =
+\begin{cases}
++\text{intensity}, & \text{if } X \in \mathcal{C}_F, \\
+-\text{intensity}, & \text{otherwise},
+\end{cases}
+\qquad
+\tau^C(X) =
+\begin{cases}
++\text{intensity}, & \text{if } X \in \mathcal{C}_C, \\
+-\text{intensity}, & \text{otherwise},
+\end{cases}
+\]
+where $\mathcal{C}_F$ and $\mathcal{C}_C$ denote the firm and consumer activating sets, respectively.
+
+Independent Gaussian noise is added to each treatment effect prior to outcome generation, allowing noise to attenuate or flip treatment-effect signs.
+
+\vspace{6pt}
+\noindent
+\textbf{Assignment of observations to combinations.}
+While activating combinations are fixed at the level of the feature space, the assignment of observations to combinations is random. The \emph{proportion of positive treatment effects} parameter controls the fraction of observations that are assigned to activating combinations. Specifically, a given fraction of observations is randomly assigned to activating combinations, with the remaining observations assigned to non-activating combinations. Conditional on this constraint, feature combinations are sampled uniformly at random. This design ensures that the prevalence of positive treatment effects is controlled independently of the complexity and overlap of activating combinations.
+
+\vspace{6pt}
+\noindent
+\textbf{Outcome generation and region labels.}
+Treatment assignment is randomized as $T \sim \mathrm{Bernoulli}(0.5)$. Outcomes are generated as
+\[
+Y^F = \mu^F(X) + \tau^F(X)\cdot T + \varepsilon^F, \qquad
+Y^C = \mu^C(X) + \tau^C(X)\cdot T + \varepsilon^C,
+\]
+where $\varepsilon^F$ and $\varepsilon^C$ are independent noise terms.
+
+Each observation is assigned a \emph{true region type} based on the signs of the noisy treatment effects $(\tau^F(X), \tau^C(X))$:
+\begin{itemize}
+    \item Region 1: $\tau^F > 0$ and $\tau^C > 0$ (win--win),
+    \item Region 2: $\tau^F > 0$ and $\tau^C \leq 0$ (firm gain, consumer loss),
+    \item Region 3: $\tau^F \leq 0$ and $\tau^C > 0$ (consumer gain, firm loss),
+    \item Region 4: $\tau^F \leq 0$ and $\tau^C \leq 0$ (lose--lose).
+\end{itemize}
+
+These region labels are used exclusively for evaluation and are never observed by the algorithm.
+
+\subsection{Experimental Factors}
+\label{sec:binary-factors}
+
+Each simulation run is characterized by a set of experimental factors that jointly determine the structure and difficulty of the data generating process. These factors are sampled independently across runs and control distinct aspects of treatment effect heterogeneity, signal quality, and statistical power. Together, they generate a broad spectrum of environments ranging from simple and well-powered to sparse, noisy, and highly imbalanced.
+
+\begin{itemize}
+    \item \emph{Complexity.}  
+    Complexity controls the number of activating feature combinations that induce positive treatment effects for both firm-side and consumer-side outcomes. Specifically, it determines the size of the activating sets $\mathcal{C}_F$ and $\mathcal{C}_C$. As complexity increases, treatment effects depend on a larger number of distinct feature combinations, requiring deeper and more intricate tree structures to correctly isolate the relevant segments.
+
+    \item \emph{Covariance between firm and consumer signals.}  
+    Covariance determines the fraction of activating combinations shared between the firm and consumer activating sets. A covariance of zero implies that activating combinations for firm and consumer outcomes are disjoint, while a covariance of one implies complete overlap. Intermediate values generate partial overlap. This factor directly controls the extent to which firm-side and consumer-side treatment effects are driven by similar underlying feature combinations.
+
+    \item \emph{Proportion of positive treatment effects.}  
+    This factor governs the fraction of observations that are assigned to activating combinations. While the activating combinations themselves are fixed at the feature-space level, observations are randomly assigned to combinations subject to this constraint. When the proportion is low, most observations experience negative treatment effects for both outcomes; when it is high, most experience positive effects. As a result, trade-off regions—such as firm gain with consumer loss—are most prevalent at intermediate values.
+
+    \item \emph{Sparsity.}  
+    Sparsity is controlled by the number of categorical variables $k$. Because the total number of features is fixed, increasing $k$ reduces the number of categories per variable and increases the number of splits required to isolate a specific activating combination. Higher sparsity therefore increases the depth and structural complexity of the tree needed to recover the treatment effect heterogeneity.
+
+    \item \emph{Noise.}  
+    Noise controls the standard deviation of Gaussian perturbations added to the treatment effects prior to outcome generation. Higher noise reduces the signal-to-noise ratio, increases the likelihood of sign reversals, and makes correct region identification more difficult even when the underlying structure is simple.
+
+    \item \emph{Training sample size.}  
+    Sample size determines the number of observations available for estimation. The size of the training dataset is drawn uniformly on a log scale between 1{,}000 and 200{,}000 observations, with an independent test dataset of half the size. Larger samples improve estimation precision and support deeper segmentation, while smaller samples exacerbate variance and increase the risk of false negatives.
+\end{itemize}
+
+By varying these factors independently, the simulation explores a wide range of data environments in which the difficulty of detecting segments of interest arises from different sources, including structural complexity, limited overlap between firm and consumer signals, class imbalance, noise, and finite-sample uncertainty.
+
+
+\subsection{Estimation and Experimental Protocol}
+\label{sec:estimation-protocol}
+
+This subsection describes how the proposed algorithm is estimated and evaluated within the simulation framework. The focus is on understanding how the co-movement emphasis parameter $\lambda$ influences the algorithm’s ability to detect segments of interest, rather than on comparing alternative estimation methods.
+
+\subsubsection{Simulation design}
+
+Each simulation run builds on the binary data generating process described in Sections~\ref{sec:binary-dgp} and~\ref{sec:binary-factors}. For every run, values for the experimental factors—complexity, noise, sparsity, proportion of positive treatment effects, covariance between firm and consumer signals, and training sample size—are independently sampled from their respective ranges. This procedure generates data environments that differ systematically in structural difficulty, signal strength, class imbalance, and alignment between firm-side and consumer-side treatment effects.
+
+For each sampled configuration, we generate an independent training dataset and a held-out test dataset. Treatment assignment is randomized with equal probability. True region labels are determined by the signs of the underlying (noisy) treatment effects and are used exclusively for out-of-sample evaluation; they are never observed by the algorithm during estimation. To ensure robust coverage of the parameter space, we repeat this procedure across 10{,}000 independent simulations.
+
+\subsubsection{Algorithm configurations}
+
+We estimate multiple configurations of the proposed algorithm that differ only in the value of the co-movement emphasis parameter $\lambda$ and the specification of regions of interest. All configurations use the same model-selection procedure described in Section~\ref{sec:model-selection}, ensuring that differences in performance are attributable solely to the role of $\lambda$ rather than to differences in tree complexity or tuning.
+
+We consider the following specifications:
+\begin{itemize}
+    \item A baseline configuration with $\lambda = 0$, in which the co-movement component is inactive and all regions are treated symmetrically.
+    \item A set of region-targeted configurations with $\lambda \in \{1, 2, 3, 4, 6, 8, 10\}$, each specifying Region~2 as the sole region of interest.
+\end{itemize}
+
+For $\lambda > 0$, the co-movement term acts as an activator within the splitting objective: it contributes to the gain function only when a candidate segment is classified as belonging to Region~2 based on its estimated treatment effects in the training data. Increasing $\lambda$ strengthens this activation, placing greater emphasis on identifying segments where firm-side gains coincide with consumer-side losses.
+
+\subsubsection{Evaluation metrics}
+
+All algorithm configurations are evaluated on the same held-out test datasets to ensure direct comparability. Performance is summarized using a set of classification-based metrics derived from the true region labels. We report overall accuracy across all regions, as well as metrics focused specifically on Region~2, including recall and the false negative rate.
+
+This evaluation protocol is intentionally aligned with the auditing objective of the method. While overall accuracy captures global classification performance, recall for Region~2 reflects the algorithm’s ability to surface segments of regulatory or ethical concern. By holding all other aspects of estimation fixed, this design isolates the role of $\lambda$ in shaping the trade-off between predictive accuracy and targeted sensitivity.
+
+In the next subsection, we present the results of this comparison and discuss how different values of $\lambda$ affect this trade-off across the simulated environments.
+
+\subsection{Results}
+\label{sec:lambda-results}
+
+\subsubsection{Accuracy--Recall Trade-off and Optimal $\lambda$}
+
+We begin by examining how the co-movement emphasis parameter $\lambda$ affects the trade-off between overall accuracy and the ability to detect Region~2 segments, where firm-side gains coincide with consumer-side losses. Figure~\ref{fig:lambda-accuracy-recall} summarizes average performance across all simulation runs.
+
+As $\lambda$ increases, overall accuracy declines monotonically. This pattern reflects the fact that activating the co-movement component in the splitting criterion prioritizes the identification of Region~2 segments, potentially at the expense of accurately assigning observations belonging to other regions. When $\lambda = 0$, the algorithm treats all regions symmetrically and achieves the highest overall accuracy, corresponding to a purely accuracy-driven objective.
+
+In contrast, recall for Region~2 exhibits a non-monotonic relationship with $\lambda$. Relative to the baseline case $\lambda = 0$, recall increases sharply for small positive values of $\lambda$, indicating that explicitly emphasizing co-movement improves the algorithm’s ability to detect firm-benefiting but consumer-harming segments. Recall reaches its maximum at $\lambda = 4$ and then declines gradually as $\lambda$ increases further. This decline suggests that excessive emphasis on co-movement can lead to over-specialization, reducing generalization and increasing false positives in held-out data.
+
+This divergence between accuracy and recall highlights the distinction between optimization and auditing objectives. If the goal were to maximize overall accuracy, the baseline configuration with $\lambda = 0$ would be preferred. However, the purpose of our method is auditing rather than prediction. In many regulatory and ethical contexts, false negatives are particularly costly: failing to detect segments in which firm-side improvements come at the expense of consumer welfare may lead to regulatory violations, reputational harm, or disproportionate impact on vulnerable populations. From this perspective, recall for Region~2 is a primary performance criterion.
+
+Although $\lambda = 4$ achieves the highest recall, the incremental gain relative to $\lambda = 2$ is small. The increase in recall between these two values is minimal, while the associated reduction in overall accuracy is more pronounced. This pattern indicates diminishing returns to increasing $\lambda$ beyond moderate values.
+
+Balancing these considerations, we view $\lambda = 2$ as a particularly attractive operating point. It captures most of the recall improvement relative to $\lambda = 0$, substantially reducing false negatives for Region~2, while avoiding the larger accuracy losses associated with higher values of $\lambda$. For practitioners seeking a default configuration aligned with auditing and compliance objectives—rather than pure predictive performance—we therefore recommend $\lambda = 2$ as a sensible default.
+
+\subsubsection{Performance Across Data Generating Dimensions}
+\label{sec:lambda-dimensions}
+
+We next examine how the accuracy--recall trade-off varies across key dimensions of the data generating process for $\lambda \in \{0, 2, 4\}$\footnote{Additional figures and detailed discussion are provided in Appendix~\ref{app:lambda-dimensions}.}. Across dimensions, the recall curves for $\lambda = 2$ and $\lambda = 4$ are generally close, indicating no practically meaningful separation between these two configurations in most settings. This finding further supports $\lambda = 2$ as a robust default choice.
+
+As complexity increases—that is, as the number of activating combinations grows—both overall accuracy and Region~2 recall decline, reflecting the increasing difficulty of recovering richer heterogeneous structures. At the same time, the recall gap between $\lambda = 0$ and $\lambda > 0$ becomes more pronounced at higher complexity levels, highlighting the value of the co-movement activation in settings where treatment-effect patterns are more intricate.
+
+Covariance between firm and consumer signals yields a particularly informative pattern. While accuracy differences across $\lambda$ values remain relatively stable, the recall advantage of activating the co-movement term is minimal when firm and consumer activating combinations do not overlap and becomes largest when overlap is high. This indicates that the co-movement component is most effective when firm-side and consumer-side treatment effects are driven by similar underlying feature combinations, consistent with the design of the joint splitting objective.
+
+Sample size also shapes the trade-off. As the number of training observations increases, accuracy improves for all configurations, and the accuracy gap between $\lambda = 0$ and $\lambda > 0$ becomes more visible. In contrast, the recall gap narrows with larger samples: the benefits of the co-movement activation are most pronounced in smaller samples and diminish as estimation precision improves.
+
+Noise produces the expected degradation in both accuracy and recall. As noise increases, the signal-to-noise ratio decreases and sign reversals become more frequent, reducing the algorithm’s ability to correctly assign regions regardless of $\lambda$.
+
+The proportion of observations assigned to activating combinations affects performance through the induced distribution of region types. Accuracy is highest at the extremes, where most observations fall into either win--win or lose--lose regions, and lowest at intermediate values where multiple region types coexist. In contrast, Region~2 recall increases with this proportion, and region-targeted configurations consistently outperform $\lambda = 0$ across most values. This suggests that targeted activation remains useful even as the overall region distribution shifts across environments.
+
+Finally, sparsity—captured by the number of categorical variables $k$—reduces both accuracy and recall as the depth required to isolate activating combinations increases. When sparsity is low, differences across $\lambda$ values are small. As sparsity increases, however, the trade-off becomes more pronounced: both the accuracy loss from region targeting and the recall gains relative to $\lambda = 0$ grow larger. This pattern reinforces the value of targeted auditing in structurally complex settings.
+
+\subsection{Conclusion of Simulation}
+
+The simulation results demonstrate that activating the co-movement component in the splitting objective substantially improves recall for Region~2 segments, which is a central requirement for auditing applications. Across a wide range of simulated environments, configurations that emphasize region-specific co-movement consistently reduce false negatives relative to the accuracy-driven baseline with $\lambda = 0$.
+
+On average, $\lambda = 2$ provides the most favorable trade-off between recall and accuracy. While larger values of $\lambda$ can yield further recall improvements in some settings, these gains are typically modest and are accompanied by more pronounced reductions in overall accuracy. Across most data-generating dimensions, $\lambda = 2$ performs comparably to higher values while maintaining better global performance.
+
+The results also highlight that the value of activating the co-movement term depends on the structure of the underlying data. In complex or highly structured environments—where treatment-effect patterns are harder to recover—region targeting leads to meaningful improvements in recall. In simpler settings, by contrast, the incremental benefits may be smaller and do not always justify the associated accuracy loss. Taken together, these findings underscore the importance of explicitly prioritizing recall when the goal is auditing for potential consumer harm, rather than maximizing predictive accuracy.
+
+
+\input{Figures/lambda comparison}
+
+\begin{comment}
+\section{Simulation Study 2: Free trial}
+\label{sec:simulation1}
+\subsection{Motivation and Overview}
+
+The first simulation study focuses on a deliberately abstract data generating process, designed to isolate the statistical properties of the proposed algorithm and to understand how the co-movement term affects accuracy and recall under controlled heterogeneity. While this abstraction is useful for stress-testing the method, many practical concerns in consumer-centric auditing arise in settings with richer behavioral structure and clearer managerial interpretation.
+
+The second simulation therefore serves two complementary goals. First, it introduces a more concrete and policy-relevant scenario—free trial design—where firm-side optimization decisions are common and consumer welfare considerations are central. Second, and more importantly, this simulation highlights a distinct source of consumer harm that is not driven by negative treatment effects per se, but by selection: firm-side optimization increases conversion by disproportionately attracting or retaining consumers for whom the product is not genuinely beneficial. Even when treatment effects on consumer outcomes are weak or ambiguous, such selection mechanisms can generate systematic consumer harm.
+
+By modeling these behavioral distortions explicitly, this simulation demonstrates that the proposed auditing framework is not limited to detecting harmful treatment effects. Instead, it can also surface segments where firm-side gains arise from psychologically driven selection effects, enabling the identification of consumer harm even when the underlying issue is not a directly negative treatment effect.
+
+\subsection{Simulation Setup}
+\label{sec:simulation2-setup}
+
+We simulate a free-trial subscription environment in which consumers are randomly assigned to either a short trial ($T=0$) or a long trial ($T=1$). Treatment assignment follows a Bernoulli distribution with equal probability. After completing the trial, each consumer decides whether to subscribe. Firm outcomes are observed for all users, while consumer outcomes are observed only for subscribers.
+
+Each consumer $i$ is associated with a vector of observed features $X_i \in \mathbb{R}^p$, drawn independently from a standard normal distribution. These features determine latent psychological constructs through deterministic but unobserved gating mechanisms. Neither the firm nor the auditing algorithm observes these latent variables; they are introduced solely through their effect on subscription behavior.
+
+The firm evaluates trial policies using subscription rates, while consumer welfare is evaluated using realized satisfaction conditional on subscription. The simulation generates environments in which firm-side optimization can improve conversion by selecting consumers whose subscription decisions are driven by psychological factors rather than genuine product usefulness.
+
+
+\subsection{Latent Psychological Constructs}
+\label{sec:simulation2-latent}
+
+Each consumer is characterized by three latent psychological constructs: usefulness ($U_i$), novelty ($N_i$), and sunk cost ($S_i$). These constructs govern subscription behavior but are not directly observed.
+
+Each construct is activated through a binary gate that depends on a subset of observed features. For a given construct, the gate takes the form
+\[
+g_i = \mathbbm{1}\left\{ X_{i,j} > \theta_j \ \text{for all } j \in \mathcal{G} \right\},
+\]
+where $\mathcal{G}$ denotes the indices of the features controlling the gate and $\theta_j$ are fixed thresholds. The gate equals one only when all associated features exceed their thresholds.
+
+Latent constructs are generated using a bipolar transformation:
+\[
+k_i = (2g_i - 1)\cdot m + v \cdot \varepsilon_i, \qquad \varepsilon_i \sim \mathcal{N}(0,1),
+\]
+\[
+L_i = \sigma(k_i),
+\]
+where $m$ controls the degree of bipolarity, $v$ controls individual-level noise, and $\sigma(\cdot)$ is the logistic function. Larger values of $m$ induce sharply separated high and low values, generating clear behavioral heterogeneity.
+
+Usefulness represents the true long-run value of the product to the consumer and serves as the benchmark for consumer welfare. Novelty captures short-term excitement associated with trying a new product, while sunk cost reflects psychological commitment accumulated through time and effort during the trial. Novelty and sunk cost influence subscription behavior but do not directly increase realized consumer welfare.
+
+\subsection{Perceived Value and Subscription Decision}
+\label{sec:simulation2-decision}
+
+Consumers base their subscription decision on perceived value rather than true usefulness. Perceived value depends on trial length and latent psychological constructs.
+
+For short trials ($T=0$), perceived value is given by
+\[
+P_i^{\text{short}} = \log\!\left( \exp(N_i) + \exp(a_u U_i) \right),
+\]
+while for long trials ($T=1$),
+\[
+P_i^{\text{long}} = \log\!\left( \exp(U_i) + \exp(a_s S_i) \right),
+\]
+where $a_u$ and $a_s$ control the relative importance of usefulness in short trials and sunk cost in long trials.
+
+Subscription probability is a linear transformation of perceived value:
+\[
+\pi_i = \mathrm{clip}(a_0 + a_p P_i, 0, 1),
+\]
+and the firm outcome is generated as
+\[
+Y_i^F \sim \mathrm{Bernoulli}(\pi_i).
+\]
+
+This structure implies that short trials primarily attract consumers with high novelty, while long trials retain consumers with high sunk cost, even when usefulness is low.
+
+\subsection{Consumer Outcomes and Selection}
+\label{sec:simulation2-outcomes}
+
+Consumer satisfaction is observed only for subscribers and equals realized usefulness:
+\[
+Y_i^C =
+\begin{cases}
+U_i, & \text{if } Y_i^F = 1, \\
+\text{unobserved}, & \text{otherwise}.
+\end{cases}
+\]
+
+Trial length does not directly affect usefulness. Any differences in consumer outcomes across trial policies arise exclusively through selection into subscription. As a result, firm-side optimization can increase subscription rates by disproportionately selecting consumers whose perceived value is inflated by novelty or sunk cost, even when their realized satisfaction is low.
+
+\subsection{Results}
+\label{sec:simulation2-results}
+
+The results show that the auditing algorithm identifies segments where long trials increase subscription rates while lowering average consumer welfare among subscribers. These segments correspond to populations for which sunk cost or novelty dominates usefulness in perceived value formation.
+
+Despite not observing the latent behavioral constructs, the algorithm recovers partitions that align with the underlying selection mechanisms. In environments where behavioral distortions are weak, the method refrains from producing splits, indicating robustness against spurious findings.
+
+Overall, the detected divergence between firm and consumer outcomes is driven by endogenous selection rather than by negative treatment effects on consumer outcomes.
+
+\subsection{Conclusion of Simulation~2}
+
+This simulation demonstrates that consumer harm can arise from firm-side optimization through behavioral selection mechanisms, even when treatment effects on consumer outcomes are not directly negative. By jointly auditing firm and consumer outcomes, the proposed framework identifies segments where firm gains are achieved by selecting consumers for whom the product is not genuinely beneficial.
+
+Together with Simulation~1, these results show that the framework applies to both treatment-effect-driven and selection-driven forms of consumer harm, broadening its relevance for auditing data-driven optimization policies.
+
+\end{comment}
+
+\section{Conclusions}
+\label{sec:conclusion}
+
+Marketing interventions are increasingly selected through continuous experimentation and optimization against firm-side metrics such as conversion, engagement, and revenue. While this infrastructure has improved managerial discipline and learning speed, it also creates a practical accountability problem: when what is optimized is narrowly defined and continuously updated, consumer-side consequences can remain unmeasured, delayed, or visible only in aggregate. In such environments, harms are most likely to be localized—concentrated in specific segments—while overall firm gains appear unambiguously positive. This gap between optimization and accountability is likely to widen further as generative AI reduces the cost of producing and iterating persuasive, personalized content at scale.
+
+This paper proposes an auditing approach that leverages the same randomized A/B testing data firms already generate. Rather than introducing a new targeting policy, the goal is diagnostic: to identify interpretable subpopulations for which an optimized intervention creates systematically different joint responses in a firm-side outcome and a consumer-side outcome. We extend recursive partitioning to a two-outcome setting and introduce a joint splitting criterion that evaluates candidate splits based on how they reveal heterogeneity in both outcomes, not only in one. In addition, a region-based weighting component allows the audit to emphasize outcome patterns of substantive interest—such as segments where firm-side gains coincide with consumer-side losses—without conflating the sign pattern with the magnitude of deviation. The resulting tree provides transparent, rule-based segments that can be communicated to managers, compliance teams, and researchers as segment-level diagnostics of alignment versus divergence.
+
+The simulation study highlights a central trade-off that is inherent to auditing applications. When the objective is to maximize overall classification accuracy across all joint-outcome regions, a symmetric criterion (i.e., without region emphasis) performs best. However, when the purpose is to detect segments of concern—particularly firm-win/consumer-lose segments—false negatives can be especially costly. Activating the region-weighted co-movement component increases sensitivity to these segments and improves recall, with moderate values of the emphasis parameter achieving substantial reductions in false negatives while limiting the loss in global accuracy. These results illustrate that auditing differs from prediction: the appropriate operating point depends on the relative cost of missed detections versus false alarms. Importantly, our estimation procedure is designed to mitigate overfitting and enhance stability. We decouple tree construction from model selection, select complexity using cross-validation on pseudo-outcomes, and use pruning to produce stable, parsimonious trees that generalize to held-out data and remain interpretable for auditing and governance purposes.
+
+The proposed framework has several implications for marketing practice and research. For firms, the method provides a practical tool for responsible personalization and internal governance. Because it uses standard experimental data and produces interpretable segmentation rules, it can be embedded into existing experimentation pipelines as a recurring diagnostic: after an intervention is chosen or updated, the audit can reveal whether firm-side improvements are accompanied by localized consumer-side losses, and which segments are most affected. This supports actionable responses such as imposing segment-level guardrails, triggering additional measurement (e.g., targeted satisfaction or regret surveys), altering the intervention for flagged segments, or redesigning objective functions to incorporate consumer outcomes. For researchers, the method offers a nonparametric way to empirically characterize when marketing optimization aligns with consumer outcomes and when it diverges, beyond pricing settings and beyond average effects. It enables systematic study of the conditions under which outcome misalignment emerges (e.g., by user history, engagement intensity, or contextual variables), and it can be used to evaluate how new optimization technologies—such as LLM-driven content generation—shift the distribution of benefits and costs across consumers.
+
+More broadly, the approach provides a bridge between optimization-focused marketing analytics and the growing emphasis on accountability in digital markets. Because marketing policies are adaptive and continuously re-optimized, one-time evaluations are insufficient. Segment-level auditing based on randomized experimentation data offers a scalable and repeatable way to monitor downstream consequences over time, supporting both internal oversight and external scrutiny in environments where interventions evolve rapidly. At the same time, the framework is intentionally modular: the “consumer-side outcome” can be defined in different ways depending on context, ranging from usage and retention to satisfaction, regret, returns, or other measures of welfare that are meaningful for the domain.
+
+Several extensions are promising. First, many applications involve more than two outcomes (e.g., short-run conversion, long-run retention, satisfaction, and trust), motivating multi-outcome auditing and segmentation based on richer notions of alignment, divergence, and Pareto trade-offs. Second, many consumer consequences unfold over time; repeated audits and longitudinal outcome measurement could help distinguish transient effects from persistent welfare changes and clarify the dynamics of optimization-induced harm. Third, when consumer outcomes are partially observed due to post-treatment selection, additional methodological work on sensitivity analysis and robust estimation would further strengthen the audit’s interpretability and credibility. Finally, an important managerial direction is to connect diagnosis to redesign: audit results can inform constrained optimization, segmented policy adjustments, or multi-objective experimentation, followed by re-auditing in an iterative governance loop.
+
+Overall, the main message of the paper is that experimentation infrastructure can serve not only optimization, but also accountability. By turning otherwise implicit firm--consumer trade-offs into measurable, interpretable, segment-level diagnostics, the proposed method provides a practical way to evaluate whether optimized marketing policies help or harm different consumers. This, in turn, offers a path toward personalization systems that are not only effective for firms, but also governable and aligned with marketing’s foundational promise of shared value creation.
+
+
+
+\newpage
+\renewcommand{\baselinestretch}{1.0} 
+\putbib
+
+
+\end{bibunit}
+\begin{bibunit}
+
+\newpage
+
+\setcounter{table}{0}
+\setcounter{page}{1}
+\setcounter{figure}{0}
+\setcounter{equation}{0}
+\setcounter{footnote}{0}
+\renewcommand{\thetable}{A\arabic{table}}
+\renewcommand{\thefigure}{A\arabic{figure}}
+\renewcommand{\theequation}{A.\arabic{equation}}
+\renewcommand{\thepage}{\roman{page}}
+\title{Are We Helping or Harming? A Method to Audit Optimized Marketing Policies}
+
+
+\author{
+       Ebrahim Barzegary  \\
+        ESSEC Business school\\
+ }
+
+\maketitle
+\begin{appendices}
+
+\section{Additional Results: Variation Across Data Generating Dimensions}
+\label{app:lambda-dimensions}
+
+This appendix reports how the performance of the algorithm varies across key dimensions of the data generating process. For each dimension, we bin simulation runs by the factor value and plot average performance for $\lambda\in\{0,2,4\}$. The primary goal is to understand when region-weighted splitting (Region~2 as the region of interest) provides the largest gains in Region~2 recall and how those gains trade off against overall accuracy.
+
+Across dimensions, $\lambda=2$ and $\lambda=4$ exhibit similar performance, and differences between them are typically small relative to the gap between $\lambda=0$ and $\lambda>0$. This reinforces the practical recommendation of $\lambda=2$ as a default configuration.
+
+\subsection{Complexity}
+As complexity increases (more activating combinations), both overall accuracy and Region~2 recall decrease for all methods, reflecting a more difficult heterogeneity structure. At the same time, the recall gap between $\lambda=0$ and $\lambda\in\{2,4\}$ grows under higher complexity, suggesting that region-weighted splitting is particularly valuable in settings where treatment-effect patterns are more complex and require more structure to recover.
+
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=0.92\textwidth]{Figures/FiguresFile/factor_comparison_complexity_accuracy.png}
+    \caption*{(a) Accuracy across complexity.}
+    \vspace{0.5em}
+    \includegraphics[width=0.92\textwidth]{Figures/FiguresFile/factor_comparison_complexity_recall_region_2.png}
+    \caption*{(b) Recall for Region~2 across complexity.}
+    \caption{Performance across complexity (number of activating combinations). Higher complexity reduces both accuracy and Region~2 recall, while increasing the recall gap between $\lambda=0$ and $\lambda>0$.}
+    \label{fig:lambda-complexity}
+\end{figure}
+
+\subsection{Covariance between firm and consumer signals}
+Accuracy differences across $\lambda$ are broadly stable across covariance levels. However, the recall advantage of region-weighting depends strongly on covariance: when overlap between firm and consumer activating combinations is near zero, the recall gap between $\lambda=0$ and $\lambda\in\{2,4\}$ is small; when overlap is high, region-weighting yields substantially higher Region~2 recall. This pattern highlights that the co-movement term is most effective when firm- and consumer-side effects share underlying drivers, allowing the algorithm to exploit joint structure to identify Region~2 segments.
+
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=0.92\textwidth]{Figures/FiguresFile/factor_comparison_covariance_accuracy.png}
+    \caption*{(a) Accuracy across covariance.}
+    \vspace{0.5em}
+    \includegraphics[width=0.92\textwidth]{Figures/FiguresFile/factor_comparison_covariance_recall_region_2.png}
+    \caption*{(b) Recall for Region~2 across covariance.}
+    \caption{Performance across covariance (proportion of shared activating combinations). The recall gain from region-weighting is smallest when overlap is low and largest when overlap is high.}
+    \label{fig:lambda-covariance}
+\end{figure}
+
+\subsection{Training sample size}
+As training sample size increases, overall accuracy increases for all methods, as expected from improved estimation precision. The accuracy gap between $\lambda=0$ and $\lambda>0$ becomes more visible with larger samples. In contrast, the recall gap shrinks as sample size grows: region-weighting provides the largest improvements in Region~2 recall when sample size is relatively small, and the benefit fades as all methods become sufficiently well-powered to detect Region~2 segments.
+
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=0.92\textwidth]{Figures/FiguresFile/factor_comparison_data_size_accuracy.png}
+    \caption*{(a) Accuracy across training sample size.}
+    \vspace{0.5em}
+    \includegraphics[width=0.92\textwidth]{Figures/FiguresFile/factor_comparison_data_size_recall_region_2.png}
+    \caption*{(b) Recall for Region~2 across training sample size.}
+    \caption{Performance across training sample size. As sample size increases, accuracy improves for all methods and the recall gap between $\lambda=0$ and $\lambda>0$ diminishes.}
+    \label{fig:lambda-datasize}
+\end{figure}
+
+\subsection{Noise}
+Noise degrades both overall accuracy and Region~2 recall across all $\lambda$ values. As effect noise increases, signal-to-noise ratio decreases and sign reversals become more frequent, making region identification more difficult. Region-weighting remains beneficial for Region~2 recall at moderate noise levels, but extreme noise eventually dominates and performance declines for all methods.
+
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=0.92\textwidth]{Figures/FiguresFile/factor_comparison_noise_accuracy.png}
+    \caption*{(a) Accuracy across noise.}
+    \vspace{0.5em}
+    \includegraphics[width=0.92\textwidth]{Figures/FiguresFile/factor_comparison_noise_recall_region_2.png}
+    \caption*{(b) Recall for Region~2 across noise.}
+    \caption{Performance across effect noise. Both accuracy and Region~2 recall decrease as noise increases.}
+    \label{fig:lambda-noise}
+\end{figure}
+
+\subsection{Proportion in Activating Combinations (Positive-Rate)}
+This factor controls the proportion of observations assigned to activating combinations (i.e., those with positive treatment effects by construction). It directly shapes the distribution of region types. Overall accuracy is highest at the extremes because region-type variation decreases: when the positive-rate is very low, most observations fall into a lose--lose regime, whereas when it is very high, most fall into a win--win regime. Accuracy is lowest at intermediate values where region labels are more mixed and classification is more difficult. Region~2 recall increases with the positive-rate, and region-weighted specifications ($\lambda=2$ and $\lambda=4$) consistently achieve higher recall than the baseline $\lambda=0$, while remaining close to each other.
+
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=0.92\textwidth]{Figures/FiguresFile/factor_comparison_rareness_accuracy.png}
+    \caption*{(a) Accuracy across the proportion in activating combinations (positive-rate).}
+    \vspace{0.5em}
+    \includegraphics[width=0.92\textwidth]{Figures/FiguresFile/factor_comparison_rareness_recall_region_2.png}
+    \caption*{(b) Recall for Region~2 across the proportion in activating combinations.}
+    \caption{Performance across the proportion in activating combinations. Accuracy is U-shaped due to changes in region-type variation, while Region~2 recall increases with the positive-rate and improves under region-weighted objectives.}
+    \label{fig:lambda-positive-rate}
+\end{figure}
+
+
+
+
+\subsection{Sparsity}
+Sparsity (the number of categorical variables $k$) governs the depth required to isolate activating combinations. As $k$ increases, both accuracy and Region~2 recall decrease for all methods. Differences across $\lambda$ are small when sparsity is low, but become more pronounced as sparsity increases: the accuracy cost of region-weighting increases, while the recall advantage relative to $\lambda=0$ becomes more meaningful. This pattern suggests that targeted auditing is most useful when the segmentation structure requires deeper trees and is harder to recover.
+
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=0.92\textwidth]{Figures/FiguresFile/factor_comparison_sparsity_accuracy.png}
+    \caption*{(a) Accuracy across sparsity.}
+    \vspace{0.5em}
+    \includegraphics[width=0.92\textwidth]{Figures/FiguresFile/factor_comparison_sparsity_recall_region_2.png}
+    \caption*{(b) Recall for Region~2 across sparsity.}
+    \caption{Performance across sparsity (number of categorical variables $k$). Higher sparsity reduces both accuracy and Region~2 recall; the trade-off across $\lambda$ becomes more salient as $k$ increases.}
+    \label{fig:lambda-sparsity}
+\end{figure}
+\begin{comment}
+    
+
+\newpage
+\putbib
+\thispagestyle{empty}
+
+\end{appendices}
+\end{bibunit}
+\end{comment}
+
+\end{document}

@@ -1,0 +1,253 @@
+\documentclass[11pt,letterpaper,english]{article}
+
+% Basic packages
+\usepackage{microtype}
+\usepackage{titling}
+\usepackage{amsmath} 
+\usepackage{amsthm}
+\usepackage{mathrsfs}
+\usepackage{caption}
+\usepackage{fontawesome}
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage{subcaption}
+\usepackage{setspace}
+\usepackage{amssymb}
+\usepackage{multirow}
+\usepackage{rotating}
+\usepackage{array}
+\usepackage{multibib}
+\usepackage{blindtext}
+\usepackage{mathtools}
+\usepackage{siunitx}
+\usepackage{colortbl}
+\usepackage{float}
+\usepackage[flushleft]{threeparttable}
+\usepackage{algorithm}
+\usepackage{multirow, makecell}
+\doublespacing
+\usepackage[margin=1in]{geometry}
+% Citations
+\usepackage[authoryear,round]{natbib} % (Smith, 2020) and Smith (2020)
+\usepackage[hidelinks]{hyperref}      % clickable DOIs/URLs
+\usepackage{doi}     
+
+% Optional: tighten spacing in the bibliography
+\setlength{\bibsep}{0pt plus 0.3ex}
+% formats DOI nicely in the bib
+\begin{document}
+
+
+% ------------------------------
+% Title
+% ------------------------------
+\begin{center}
+    \Large \textbf{Help or Harm? A New Recursive Partitioning Approach to Audit Marketing Interventions} \\
+    \vspace{0.5cm}
+    \large AMA Winter Academic Conference Submission \\
+    \normalsize
+\end{center}
+
+% ------------------------------
+% 1. Short Abstract (75–100 words)
+% ------------------------------
+\section{Short Abstract}
+Firms increasingly rely on large-scale A/B testing and personalization, typically optimizing for firm-side KPIs while overlooking unintended consequences for consumers and society. With new regulations such as the Digital Services Act (DSA, 2024), firms are now required to audit algorithms for risks to well-being and fairness. We propose a guided recursive partitioning algorithm that leverages standard experimental data to identify interpretable subgroups where firm and customer outcomes either converge (win–win) or diverge (trade-off). A simulated free-trial setting illustrates how the method uncovers vulnerable segments and delivers actionable transparency. Our open-access Python package supports adoption by researchers and practitioners.
+
+% ------------------------------
+% 2. Key Contributions to Academe and Practitioners (≤ 300 words)
+% ------------------------------
+\section{Key Contributions to Academe and Practitioners}
+Most personalization and policy design methods optimize firm-side outcomes such as revenue or engagement, often neglecting customer well-being, long-term performance, or societal risks. Recent multi-objective approaches attempt to balance competing goals, but remain largely prescriptive: they design new policies rather than auditing existing ones. Black-box models provide powerful predictions yet lack transparency, while post-hoc segmentation often masks the heterogeneity of interest.
+We contribute by introducing a guided recursive partitioning algorithm that estimates heterogeneous treatment effects on two outcomes and their interaction simultaneously. Its novel splitting rule identifies interpretable subgroups where firm and customer outcomes either converge (win–win) or diverge (trade-off). Unlike black-box optimization, our method produces a transparent, rule-based tree that directly integrates both objectives and their interaction, making segment discovery immediately actionable.
+For researchers, the framework systematically uncovers segments where outcomes align or conflict, thereby opening the door to theorization about why such patterns emerge. Explanations may involve behavioral biases, structural frictions, or contextual heterogeneity. In this way, the method links methodological advances in causal inference with substantive research on consumer behavior, fairness, and sustainability.
+For practitioners, the method provides a practical auditing tool using the same randomized experiments already collected for optimization. It reveals who benefits, who is harmed, and whether vulnerable groups are disproportionately affected. Importantly, the algorithm also quantifies how much value firms may be leaving on the table by considering unoptimized but more customer-centric solutions. This enables compliance with emerging regulations such as the Digital Services Act (DSA, 2024), reduces reputational risks, and builds consumer trust. The rule-based output also facilitates governance, regulatory review, and external communication.
+We illustrate the method in a simulated free-trial setting with novelty-seeking and sunk-cost effects, showing how it uncovers aligned and misaligned segments even when the underlying drivers are latent.
+
+
+
+% ------------------------------
+% 3. Long Abstract (≤ 2000 words)
+% ------------------------------
+\section{Long Abstract}
+\subsection{Motivation and Context}
+
+Over the past decade, the widespread adoption of large-scale A/B testing and personalization has created a new equilibrium in marketing decision-making. Firms now routinely optimize policies such as pricing, promotions, and recommendation systems using experiment-driven insights. This equilibrium has greatly improved firm performance but also introduces new risks: by focusing narrowly on optimization, firms may unintentionally harm consumer well-being, societal values, and even planetary sustainability. These unintended consequences are often invisible in aggregate analyses, which obscure systematic subgroup harms.
+
+The challenges emerging from this new equilibrium are threefold. First, most personalization methods are designed to maximize firm-side KPIs (e.g., revenue, engagement) while giving far less systematic attention to consumer welfare. Second, the increasing reliance on complex, black-box models (e.g., deep learning) makes personalization difficult to interpret, limiting transparency, accountability, and managerial trust. Third, personalization raises fairness and distributional concerns: optimized policies may systematically benefit some groups while harming others. For instance, urgency cues may help indecisive customers make satisfying choices but pressure others into regrettable purchases, while free-trial optimization may boost subscriptions overall but disadvantage novelty-seeking customers who churn quickly and feel regret.
+
+These challenges matter because they scale with the very technologies that drive modern marketing. Left unchecked, optimization can systematically erode consumer trust and create broader societal harms. It is therefore not surprising that regulators have begun to respond. The Digital Services Act (DSA, 2024) explicitly requires large platforms to audit and mitigate systemic algorithmic risks, including threats to consumer well-being, mental health, and democratic processes. Beyond compliance, firms also face reputational and legal risks if customers perceive that algorithms exploit rather than serve them.
+
+At the same time, there are important methodological challenges: most existing approaches are either black-box models that lack transparency or they optimize a narrow set of firm-side objectives without systematically incorporating consumer, societal, or planetary outcomes. This leaves firms, researchers and regulators without practical tools for auditing existing policies or for understanding where and why trade-offs emerge.
+
+We address these challenges by introducing a guided recursive partitioning algorithm for auditing. Our method directly uncovers interpretable subgroups where firm and customer outcomes either converge (win–win) or diverge (trade-off). Unlike black-box optimization, our rule-based approach is transparent and grounded in standard experimental data that firms already collect. Crucially, it also quantifies the cost of being customer-centric, by comparing firm outcomes under optimal policies versus more welfare-sensitive alternatives. This enables managers to evaluate trade-offs, regulators to scrutinize algorithmic practices, and researchers to investigate the mechanisms that generate these patterns.
+
+\subsection{Literature Review}
+
+Our work builds on three streams of research.
+
+\paragraph{Recursive Partitioning for Heterogeneous Effects} 
+
+Tree-based methods have become central to estimating treatment effect heterogeneity. Causal trees \citep{athey2016recursive}, causal forests \citep{wager2018estimation}, and generalized random forests \citep{athey2019grf} provide flexible, nonparametric ways to detect heterogeneity in a single outcome. Extensions such as RePaD \citep{barzegary2022recursive} show how tailored splitting rules can adapt recursive partitioning to dynamic discrete choice modeling settings. We build on this stream by proposing a new splitting criterion that jointly evaluates treatment effects on two different outcomes—such as firm KPIs and consumer welfare—with a focus on identifying subgroups where these outcomes converge (align) or diverge (conflict). The methodology allows us to identify interpretable subgroups where these outcomes align or conflict.
+
+\paragraph{Personalized Policy Design}  
+Another stream focuses on data-driven policy optimization. Early work on empirical welfare maximization \citep{kitagawa2018should} and policy learning with observational data \citep{athey2021policy} typically optimized a single objective. More recent advances allow firms to optimize multiple outcomes, for example by identifying policies along the Pareto frontier of competing objectives \citep{rafieian2025multiobjective}. However, as highlighted by \citet{lemmens2025personalization}, most methods in personalization are prescriptive—they are designed to generate and optimize new policies.  
+
+In contrast, our method is diagnostic: it audits existing policies by uncovering subgroups where firm-side and consumer-side outcomes converge (win–win) or diverge (trade-off). Importantly, it produces a rule-based, interpretable decision tree that makes the discovered segments transparent and actionable. This provides practitioners with clear, data-driven insights into which customers are helped or harmed, while also offering researchers a structured way to study the mechanisms driving alignment or conflict. Unlike black-box multi-objective methods, our approach directly incorporates multiple objectives and their interactions into the recursive partitioning process, yielding both accuracy and interpretability.
+
+
+\paragraph{Fairness, Ethics, and Consumer-Centric Design}  
+A third stream examines fairness, ethics, and consumer welfare in personalization. Prior research has shown that personalization can create unintended harms: for instance, personalized pricing and recommender systems may reduce consumer surplus or distort competition \citep{dube2023personalized, zhou2023competing, donnelly2024welfare}. Beyond efficiency concerns, algorithmic bias research highlights that personalization can systematically disadvantage protected groups, raising ethical and legal challenges \citep{lambrecht2019algorithmic}.  As emphasized by \citet{rai2020explainable} and \citet{lemmens2025personalization}, what is still missing are \textit{transparent, diagnostic tools} that reveal how personalization affects different subgroups, and whether firm- and customer-side outcomes align or diverge. 
+
+Our contribution addresses this gap by introducing a generalizable auditing framework that directly uncovers win–win and trade-off segments in a transparent, interpretable way. Unlike prior work, our method is not limited to fairness defined by legally protected attributes: it can surface harms across any vulnerable subgroup, including those defined by behavioral traits or preferences. This provides firms with a practical tool to evaluate the unintended consequences of their policies, helps regulators enforce accountability under frameworks like the DSA, and supports the design of customer- and society-centric personalization strategies that go beyond compliance toward long-term trust and well-being.
+
+\subsection{Method}
+
+We formalize the auditing problem in a potential outcomes framework. Each individual $i$ has treatment $T_i \in \{0,1\}$, covariates $X_i$, a firm-side outcome $Y_i^F$ (e.g., conversion or purchase), and a consumer-side outcome $Y_i^C$ (e.g., retention, satisfaction), observed conditional on $Y_i^F=1$. The causal effects of interest are
+\[
+\tau^F(x) = \mathbb{E}[Y_i^F(1)-Y_i^F(0)\mid X_i=x], \quad
+\tau^C(x) = \mathbb{E}[Y_i^C(1)-Y_i^C(0)\mid X_i=x, Y_i^F=1].
+\]
+
+Our goal is to partition the covariate space into interpretable segments that satisfy three desiderata:
+\begin{enumerate}
+    \item Within-segment homogeneity in treatment effects
+    \item Between-segment heterogeneity in treatment effects
+    \item Convergence--divergence emphasis maximizing the identification of segments where outcomes align (win--win) or conflict (trade-off).
+\end{enumerate}
+
+The first two desiderata are standard in heterogeneous treatment effect estimation with a single outcome and are commonly addressed using recursive partitioning trees. By extending this tradition to simultaneously account for both $\tau^F$ and $\tau^C$---in effect, summing the same heterogeneity objective across two outcomes---we directly ensure within-segment homogeneity and between-segment heterogeneity. The third desideratum, however, requires a novel contribution: explicitly capturing the interaction between firm-side and consumer-side effects. This is achieved through a covariance-based term in our splitting rule, which guides the recursive partitioning algorithm toward partitions that emphasize convergence or divergence between outcomes.
+
+Formally, we propose a guided recursive partitioning tree with the following joint splitting criterion. For a candidate split of segment $S$ into $S_L$ and $S_R$, the gain is
+\[
+\Delta(S_L,S_R) = \sum_{j \in \{L,R\}} w_j \cdot g(\hat{\tau}^F(S_j), \hat{\tau}^C(S_j))
+- g(\hat{\tau}^F(S), \hat{\tau}^C(S)),
+\]
+where $w_j = |S_j|/|S|$ and the function $g$ is defined as
+\[
+g(\tau^F,\tau^C) =
+\left(\frac{\tau^F-\bar{\tau}^F}{\sigma_F}\right)^2 +
+\left(\frac{\tau^C-\bar{\tau}^C}{\sigma_C}\right)^2
++ \lambda \cdot \phi\!\left(\frac{(\tau^F-\bar{\tau}^F)(\tau^C-\bar{\tau}^C)}{\sigma_F\sigma_C}\right).
+\]
+Here, the first two terms enforce the standard goals of treatment effect heterogeneity (desiderata 1 and 2), while the final term---scaled by tuning parameter $\lambda$ and shaped by $\phi(\cdot)$---captures convergence and divergence between firm and consumer outcomes (desideratum 3).
+
+The first two terms ensure that splits reveal treatment effect variation in both outcomes, normalized by their standard deviations $(\sigma_F,\sigma_C)$ so that neither dominates due to scale or noise. The third term is the \emph{cross-movement term}, which captures whether firm and consumer effects move together or apart. Formally, $\phi(d)$ can be configured as
+\[
+\phi(d) =
+\begin{cases}
+\max(0, \; d) & \text{Convergence-seeking mode}, \\
+\max(0, \; -d) & \text{Divergence-seeking mode}, \\
+|d| & \text{Both (magnitude-only) mode},
+\end{cases}
+\]
+where $d$ is the centered cross-moment. This allows the analyst to explicitly guide the tree toward discovering alignments, trade-offs, or both types of segments.
+
+To avoid overfitting, we adopt a simple train/validation cross-fitting scheme. A tree is grown on the training set, and its quality is evaluated on the validation set by
+\[
+\mathcal{Q}(\Pi;\text{val}) = \sum_{S \in \Pi} |S_{\text{val}}| \cdot 
+\left[ \left(\frac{\hat{\tau}^F_{\text{val}}(S)-\hat{\tau}^F_{\text{train}}(S)}{\hat{\sigma}^F_{\text{val}}(S)}\right)^2 +
+       \left(\frac{\hat{\tau}^C_{\text{val}}(S)-\hat{\tau}^C_{\text{train}}(S)}{\hat{\sigma}^C_{\text{val}}(S)}\right)^2 \right].
+\]
+This procedure leverages the recursive partitioning structure while checking whether the discovered heterogeneity generalizes, penalizing segments that appear only due to noise in one outcome.
+
+In sum, the method is a recursive partitioning tree tailored for multi-objective auditing. It partitions consumers into interpretable groups where firm- and consumer-side treatment effects are homogeneous internally but differ meaningfully across groups, enabling firms to detect hidden harms or win--win opportunities using the same experimental data already collected for optimization.
+% 3.3 Simulation Illustration
+\subsection{Simulation}
+\subsubsection{Simulation Design}
+
+To evaluate our method, we design a stylized but intuitive simulation of subscription decisions in a free-trial setting. This setting is widely used in practice (e.g., for software, streaming, or digital services), and it naturally generates tension between firm incentives and consumer welfare. The firm must decide between offering a \emph{short} trial or a \emph{long} trial, a decision that is typically optimized using A/B testing. Consumers, in turn, decide whether to subscribe based on their experience during the trial. Importantly, this decision is shaped not only by the actual usefulness of the product but also by psychological factors that can systematically bias perceived value. 
+
+We incorporate three such psychological constructs into the simulation: \emph{Usefulness}, \emph{Novelty}, and \emph{Sunk Cost}. Together, these factors allow us to generate environments that exhibit both alignment (win--win outcomes) and misalignment (trade-offs) for the optimal trial length between firm and consumer incentives across different user segments.
+
+\paragraph{Usefulness ($U$).} Usefulness reflects the intrinsic, true benefit of the product to the consumer. When usefulness is high, subscribing enhances consumer welfare because the product genuinely improves their experience or productivity. When usefulness is low, however, subscription is not in the user’s best interest. In our framework, usefulness acts as the ``ground truth’’ against which we evaluate whether consumer decisions are welfare-enhancing.
+
+\paragraph{Novelty ($N$).} Novelty captures the short-term excitement or curiosity that users may feel when encountering a new product. In a short trial, this novelty effect can inflate perceived value: users may become overly enthusiastic and subscribe even when true usefulness is low. Conversely, when the trial is long, novelty tends to wear off, meaning it contributes little to the decision. Thus, novelty can create cases where firm conversions increase (due to inflated enthusiasm), while consumer welfare decreases (because subscriptions are made to low-usefulness products).
+
+\paragraph{Sunk Cost ($S$).} Sunk cost reflects the investment of time, effort, or personal data that a user accumulates during a longer trial. A high sunk cost can artificially increase perceived usefulness, making the product feel harder to abandon even when its true benefit is limited. For example, a user who has already invested hours in setting up playlists, customizing preferences, or learning features may subscribe mainly to avoid wasting that investment. As with novelty, sunk cost can thus create a divergence between the firm’s goal of maximizing subscriptions and the consumer’s long-term welfare.
+
+\paragraph{Decision Process.} Crucially, users subscribe not based on true usefulness but on their \emph{perceived usefulness}, which is influenced by $U$, $N$, and $S$. The firm’s optimal policy is therefore the trial length that maximizes conversion rates. In contrast, the welfare-optimal policy for the consumer is the trial length that aligns subscription with true usefulness (i.e., users with high $U$ subscribe, and those with low $U$ do not). Whenever novelty or sunk cost inflate perceived usefulness, these two objectives diverge: the firm prefers the policy that exploits psychological biases to increase subscriptions, while the consumer would be better off under a different policy that prevents regretful purchases.
+
+\paragraph{Illustrative Tension.} This setup allows us to simulate both win--win and trade-off segments. For instance, in segments with high $U$, both the firm and the consumer benefit from longer trials because genuine value is revealed. In segments with low $U$ but high $N$, the firm benefits from offering a short trial (boosting conversions through novelty), but consumers are harmed because they subscribe to a product that is not useful in the long run. Similarly, in segments with low $U$ but high $S$, long trials increase firm revenue by locking in customers, but consumer welfare suffers due to regretful subscriptions driven by sunk cost effects. These scenarios capture the very misalignments our auditing method is designed to detect.
+
+Overall, this stylized simulation provides a transparent, controlled environment where ground truth is known. It creates both aligned and misaligned incentive structures, enabling us to benchmark our algorithm’s ability to uncover the subgroups where firm-side optimization systematically harms consumer welfare.
+
+
+\subsubsection{Mathematical formulation}
+
+To evaluate the performance of our algorithm, we design a data-generating process that operationalizes the behavioral intuition from the previous section. Each individual $i$ is described by covariates $X_i \in \mathbb{R}^p$, with $X_{ik} \sim \mathcal{N}(0,1)$. Firms observe $X_i$ but do not directly observe the underlying psychological constructs---\emph{Usefulness}, \emph{Novelty}, and \emph{Sunk Cost}---that drive consumer behavior.
+
+\paragraph{Latent constructs.}
+For each construct $c \in \{U,N,S\}$ we define a latent score via a conjunctive gate:
+\[
+g_i^{(c)} \;=\; \mathbb{I}\!\Big( X_{i,j} > \theta_{c,j} \;\;\forall j \in I_c \Big),
+\]
+where $I_c$ indexes the set of features linked to construct $c$ and $\theta_{c,j}$ are thresholds. The gate is then mapped to a continuous value through
+\[
+K_i^{(c)} = (2g_i^{(c)}-1)\, m_c + v \,\varepsilon_i^{(c)}, 
+\qquad
+C_i = \sigma(K_i^{(c)}), \quad \varepsilon_i^{(c)} \sim \mathcal{N}(0,1).
+\]
+This generates continuous construct values $C_i \in (0,1)$, interpreted as $U_i$, $N_i$, and $S_i$. The parameter $m_c$ introduces bipolarity, producing distinct high/low groups; setting $m_c=0$ yields smoother, unimodal variation. By varying $m_c$, we can simulate environments where latent constructs are either well-separated or diffuse in the covariate space, allowing us to evaluate the algorithm’s ability to recover meaningful segments under both conditions. The noise term $v$ controls idiosyncratic heterogeneity, e.g., individual differences, and can add noise to the data-generating process.
+
+\paragraph{Treatment and perceived value.}
+Treatment is randomized: $T_i \sim \text{Bernoulli}(0.5)$. Perceived value under short ($T=0$) and long ($T=1$) trials is
+\[
+P_i(0) = \log\!\big(\exp(N_i) + \exp(a_u U_i)\big), 
+\qquad
+P_i(1) = \log\!\big(\exp(U_i) + \exp(a_s S_i)\big).
+\]
+
+We use the smooth $\log\!\operatorname{add}\exp$ operator, which behaves like a soft maximum. Intuitively, this says: under a short trial ($T=0$), perceived value comes from either novelty or usefulness (whichever dominates). Under a long trial ($T=1$), perceived value comes from usefulness or sunk cost. This captures the behavioral intuition that novelty and sunk cost can overshadow true usefulness, but usefulness still always matters. The weights $a_u$ and $a_s$ tune the strength of usefulness and sunk cost contributions.
+
+\paragraph{Subscription and consumer outcomes.}
+Subscription probability is affine in perceived value and clipped to $[0,1]$:
+\[
+\pi_i = \min\!\big(\max(a_0 + a_p P_i,\,0),\,1\big), 
+\qquad
+Y_i^F \sim \text{Bernoulli}(\pi_i).
+\]
+The consumer-side outcome is observed only conditional on subscription:
+\[
+Y_i^C = 
+\begin{cases}
+U_i, & \text{if } Y_i^F = 1,\\
+\text{N/A}, & \text{if } Y_i^F = 0.
+\end{cases}
+\]
+
+\paragraph{Interpretability and flexibility.}
+The design exposes interpretable levers: $m_c$ controls bipolarity, $v$ controls noise, $a_u$ and $a_s$ adjust the weight of usefulness relative to novelty and sunk cost, and the choice of $(I_c,\theta_c)$ governs which features drive each construct. By tuning these parameters, we can simulate environments ranging from full alignment (usefulness-driven) to systematic divergence (novelty or sunk-cost-driven), providing a controlled testbed for assessing whether the recursive partitioning algorithm recovers the intended segments.
+
+
+\subsection{Results and Conclusion}
+\label{sec:results}
+
+We ran simulations across a wide range of knob combinations---varying the degree of bipolarity, noise, and construct strengths---to evaluate the robustness and diagnostic capability of our algorithm. The results can be summarized as follows:
+
+\begin{enumerate}
+    \item \textbf{Detection of convergence and divergence.} The algorithm successfully identifies regions of the feature space where firm and consumer incentives either align (convergence) or diverge (misalignment). Figure~\ref{figure:sample} illustrates a representative segmentation tree, where each leaf reveals distinct consumer segments, and color-coding highlights interpretable regions of win--win, and divergent outcomes.
+    
+    \item \textbf{Behavioral discovery through outcomes.} A key finding is that our method can separate segments that correspond to latent psychological constructs, even though these constructs are unobserved. By exploiting differences in outcomes across covariate regions, the algorithm identifies misalignment patterns that point to underlying behavioral mechanisms. For instance, the method uncovers segments with high novelty but low sunk cost as areas of systematic divergence: conversions rise due to inflated enthusiasm, but consumer welfare falls due to regretful purchases. This shows that outcome-driven segmentation can highlight regions warranting deeper behavioral investigation, where consumer harm may otherwise remain hidden.
+    
+    \item \textbf{Scalability and robustness to irrelevant variables.} The method scales well to high-dimensional settings. In a scenario with $p=100$ covariates, only three of which influenced the data-generating process, the algorithm correctly ignored irrelevant features and recovered splits based on the true underlying constructs.
+    
+    \item \textbf{Resistance to spurious patterns.} The algorithm does not mistake randomness for structure. In a setting where usefulness, novelty, and sunk cost were randomized with no systematic signal across $p=100$ variables, the hyperparameter optimization correctly selected a null model, returning a tree with no splits.
+\end{enumerate}
+
+Taken together, these findings demonstrate that our approach is able to (i) uncover interpretable regions of alignment and misalignment between firm and consumer incentives, (ii) recover latent behavioral mechanisms solely from outcome data, offering managers and researchers diagnostic insight into why harms emerge, (iii) scale to realistic high-dimensional environments without overfitting irrelevant features, and (iv) remain conservative in the absence of true structure. This makes the method a reliable diagnostic tool for auditing optimized marketing policies and detecting settings in which firm-side gains may arise at the expense of consumer well-being.
+
+
+\newpage
+\section{Figure/Table}
+
+\input{Figures/sample_output}
+
+% ------------------------------
+% 5. References
+% ------------------------------
+\newpage
+
+\bibliographystyle{abbrvnat} % or abbrvnat/plainnat/journal .bst
+\bibliography{ref}   
+
+\end{document}

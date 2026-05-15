@@ -1,0 +1,100 @@
+\documentclass[12pt]{article}
+
+% Page layout
+\usepackage[letterpaper,margin=1in]{geometry}
+
+% Font: Times New Roman
+\usepackage{times}
+
+% Double spacing
+\usepackage{setspace}
+\doublespacing
+
+% No paragraph indentation
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+
+\begin{document}
+
+% =========================
+% TITLE
+% =========================
+\begin{center}
+\textbf{\MakeUppercase{Are We Helping or Harming? A Method to Audit Optimized Marketing Policies}}
+\end{center}
+
+\vspace{0.5em}
+
+% =========================
+% AUTHOR INFO
+% =========================
+\begin{center}
+Ebrahim Barzegary \\
+ESSEC Business School
+\end{center}
+
+\vspace{0.5em}
+
+% =========================
+% CONTACT INFO
+% =========================
+For further information, please contact Ebrahim Barzegary, Assistant Professor of Marketing, ESSEC Business School (barzegary@essec.edu).
+
+\vspace{0.75em}
+
+% =========================
+% KEYWORDS
+% =========================
+\textbf{Keywords:} marketing optimization, consumer well-being, responsible personalization, algorithmic auditing, recursive partitioning
+
+\vspace{0.75em}
+
+% =========================
+% ONE-SENTENCE DESCRIPTION
+% =========================
+\textbf{Description:} This paper proposes a diagnostic method that uses randomized experimentation data to audit when firm-optimized marketing interventions generate misalignment between firm performance and consumer outcomes.
+
+\vspace{1.5em}
+
+% =========================
+% EXTENDED ABSTRACT HEADING
+% =========================
+\begin{center}
+\textbf{\MakeUppercase{Extended Abstract}}
+\end{center}
+
+\vspace{1em}
+
+% =========================
+% RESEARCH QUESTION
+% =========================
+\textbf{Research Question}
+
+Modern marketing interventions are increasingly optimized through continuous A/B testing against firm-side objectives such as conversion, engagement, or revenue. While this experimentation infrastructure improves decision speed and efficiency, it creates a fundamental accountability challenge: consumer-side consequences are rarely optimized directly and may remain invisible when harms are localized to specific segments. This paper asks how firms, researchers, and regulators can systematically audit optimized marketing policies to identify when firm gains coincide with consumer losses. Rather than proposing a new targeting or optimization algorithm, the central question is diagnostic: can existing experimental data be repurposed to reveal interpretable subpopulations where firm-side improvements are accompanied by negative or adverse consumer outcomes? The goal is to operationalize the concept of harm in a way that is compatible with continuous optimization, scalable across interventions, and actionable for governance and responsible personalization.
+
+% =========================
+% METHOD AND DATA
+% =========================
+\textbf{Method and Data}
+
+We propose an auditing framework that extends recursive partitioning to a two-outcome setting using randomized A/B testing data that firms already generate. The method jointly analyzes treatment effects on a firm-side outcome (e.g., conversion or revenue) and a consumer-side outcome (e.g., usage, satisfaction, retention, or regret). The tree-growing procedure uses a joint splitting criterion that rewards heterogeneity in both outcomes, normalized relative to root-level variation, ensuring that splits surface substantively meaningful deviations rather than local noise. A region-weighting component allows the audit to prioritize specific outcome patterns—such as firm gain combined with consumer loss—without conflating sign patterns with effect magnitude. Tree construction is decoupled from model selection: hyperparameters are chosen using cross-validation on pseudo-outcomes, and pruning is applied to produce stable, interpretable trees suitable for auditing. The framework accommodates fully observed and partially observed consumer outcomes and is designed for diagnostic use rather than policy optimization.
+
+% =========================
+% SUMMARY OF FINDINGS
+% =========================
+\textbf{Summary of Findings}
+
+Simulation results demonstrate that explicitly emphasizing joint outcome patterns substantially improves the detection of segments in which firm-side gains coincide with consumer-side losses. Relative to accuracy-driven baselines, region-weighted splitting consistently reduces false negatives for these segments, which are central to auditing and regulatory contexts. Increasing the strength of the region emphasis improves recall but reduces overall classification accuracy, highlighting an inherent trade-off between prediction and auditing objectives. Moderate emphasis achieves most of the recall gains while preserving reasonable global performance. The benefits of region-weighted auditing are strongest in complex, noisy, or sparsely structured environments, where harmful effects are most likely to be hidden in aggregate analyses. Importantly, the method remains conservative in simpler settings, refraining from producing spurious segments. These findings show that auditing requires different operating points than optimization and that targeted sensitivity is essential when missed detections are costly.
+
+% =========================
+% KEY CONTRIBUTIONS
+% =========================
+\textbf{Key Contributions}
+
+This paper makes three main contributions. First, it reframes marketing experimentation infrastructure as a tool not only for optimization but also for accountability, showing how existing A/B testing data can be repurposed for systematic auditing. Second, it introduces a novel methodological extension of recursive partitioning to a two-outcome setting that explicitly targets alignment and divergence between firm and consumer outcomes, producing transparent, segment-level diagnostics rather than black-box predictions. Third, it clarifies the distinction between prediction and auditing objectives in data-driven marketing, demonstrating that responsible personalization requires prioritizing sensitivity to harm over aggregate accuracy. More broadly, the framework provides a practical foundation for internal governance, regulatory compliance, and empirical research on when optimized marketing policies help versus harm consumers.
+
+\vspace{1em}
+
+References are available upon request.
+
+\end{document}

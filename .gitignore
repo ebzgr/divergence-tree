@@ -33,9 +33,11 @@ Thumbs.db
 # Generated simulation artifacts and large local outputs
 outputs/
 
-# Research writing and bibliography (local only)
-paper/
+# Bibliography sources (local only)
 refs/
+
+# LaTeX build output under paper (sources in paper/ are tracked)
+paper/build/
 
 # Local datasets and agent docs (not for GitHub)
 data/

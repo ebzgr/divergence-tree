@@ -1,0 +1,19 @@
+\begin{table}[htp!]
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+Method & Accuracy & Recall (Region 2) & FNR (Region 2) & N Leaves \\
+\midrule
+DivTree $\lambda=0$ & 0.522 (0.267) & 0.386 (0.414) & 0.614 (0.414) & 41.03 (31.42) \\
+DivTree $\lambda=1$ & 0.520 (0.268) & 0.401 (0.401) & 0.599 (0.401) & 41.07 (31.32) \\
+DivTree $\lambda=2$ & 0.517 (0.269) & 0.409 (0.393) & 0.591 (0.393) & 40.64 (31.01) \\
+DivTree $\lambda=4$ & 0.515 (0.270) & 0.420 (0.383) & 0.580 (0.383) & 40.72 (30.74) \\
+DivTree $\lambda=8$ & 0.512 (0.271) & 0.426 (0.379) & 0.574 (0.379) & 40.35 (30.18) \\
+TwoStep (tuned) & 0.495 (0.153) & 0.309 (0.270) & 0.691 (0.270) & 143.91 (86.98) \\
+TwoStep (recall) & 0.472 (0.152) & 0.319 (0.297) & 0.681 (0.297) & 123.52 (89.91) \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:method-comparison}
+Method comparison across simulation runs ($n=5758$). Entries are mean (standard deviation). Recall for Region~2 is the primary diagnostic metric. Accuracy is reported to show the trade-off as $\lambda$ increases.}
+\end{table}
