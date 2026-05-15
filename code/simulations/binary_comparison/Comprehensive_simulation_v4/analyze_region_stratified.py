@@ -1,5 +1,5 @@
 """
-Analysis for region-stratified lambda + TwoStep simulation results (v3).
+Analysis for region-stratified lambda + TwoStep simulation results (v4).
 """
 
 import json
@@ -301,12 +301,24 @@ def create_factor_comparison_plots(df: pd.DataFrame, output_dir: str, *, verbose
         ("twostep_tuned", "TwoStep (tuned)", "#9467bd", "D"),
         ("twostep_recall", "TwoStep (recall)", "#d62728", "v"),
     ]
-    metrics = ["accuracy", "recall_region_2", "fnr_region_2", "precision_region_2", "cpu_time", "runtime"]
+    # v4 should plot comparisons across the *exact grid values* (no binning).
+    metrics = [
+        "accuracy",
+        "f1_region_2",
+        "fnr_region_2",
+        "precision_region_2",
+        "recall_region_2",
+        "n_leaves",
+        "cpu_time",
+        "runtime",
+    ]
     metric_labels = {
         "accuracy": "Accuracy",
+        "f1_region_2": "F1 Score (Region 2)",
         "recall_region_2": "Recall (Region 2)",
         "fnr_region_2": "False Negative Rate (Region 2)",
         "precision_region_2": "Precision (Region 2)",
+        "n_leaves": "Number of Leaves",
         "cpu_time": "CPU Time (seconds)",
         "runtime": "Runtime (seconds)",
     }
@@ -363,32 +375,16 @@ def create_factor_comparison_plots(df: pd.DataFrame, output_dir: str, *, verbose
         if len(df[factor_col].dropna().unique()) < 2:
             continue
 
-        is_discrete = factor_info["is_discrete"]
+        is_discrete = bool(factor_info["is_discrete"])
+        df_plot = df.copy()
+        df_plot["_factor_value"] = df_plot[factor_col]
+        # For v4, continuous factors are also on fixed grids; use the exact unique values.
         if is_discrete:
-            factor_values = sorted(df[factor_col].dropna().unique())
-            df_plot = df.copy()
-            df_plot["_factor_bin"] = df_plot[factor_col]
+            factor_values = sorted(df_plot["_factor_value"].dropna().astype(int).unique())
             bin_edges = None
-            bin_midpoints = None
         else:
-            n_bins = min(20, max(10, len(df[factor_col].dropna().unique()) // 10))
-            factor_min = df[factor_col].min()
-            factor_max = df[factor_col].max()
-            if factor_info.get("log_x"):
-                lo = max(float(factor_min), 1e-12)
-                hi = max(float(factor_max), lo * (1.0 + 1e-9))
-                bin_edges = np.logspace(np.log10(lo), np.log10(hi), n_bins + 1)
-            else:
-                bin_edges = np.linspace(factor_min, factor_max, n_bins + 1)
-            bin_midpoints = (bin_edges[:-1] + bin_edges[1:]) / 2
-            df_plot = df.copy()
-            df_plot["_factor_bin"] = pd.cut(
-                df_plot[factor_col],
-                bins=bin_edges,
-                labels=bin_midpoints,
-                include_lowest=True,
-            )
-            factor_values = sorted(bin_midpoints)
+            factor_values = sorted(df_plot["_factor_value"].dropna().astype(float).unique())
+            bin_edges = None
 
         if len(factor_values) == 0:
             continue
@@ -399,8 +395,7 @@ def create_factor_comparison_plots(df: pd.DataFrame, output_dir: str, *, verbose
             "xLabel": factor_info["xlabel"],
             "logX": bool(factor_info.get("log_x", False)),
             "x": [int(v) if is_discrete else _round5(v) for v in factor_values],
-            # Provide bin edges only for continuous factors (for tooltips if needed).
-            "binEdges": None if is_discrete else [_round5(x) for x in bin_edges],
+            "binEdges": None,
             "metrics": {},
         }
 
@@ -411,10 +406,10 @@ def create_factor_comparison_plots(df: pd.DataFrame, output_dir: str, *, verbose
             factor_data = []
             for factor_val in factor_values:
                 if is_discrete:
-                    mask = df_plot["_factor_bin"] == factor_val
+                    mask = df_plot["_factor_value"].astype(int) == int(factor_val)
                 else:
-                    bin_numeric = pd.to_numeric(df_plot["_factor_bin"], errors="coerce")
-                    mask = np.abs(bin_numeric - float(factor_val)) < 1e-10
+                    # Float equality should be safe here because values come from exact grid uniques.
+                    mask = df_plot["_factor_value"].astype(float) == float(factor_val)
                 subset = df_plot[mask]
                 if len(subset) == 0:
                     continue
@@ -442,7 +437,7 @@ def create_factor_comparison_plots(df: pd.DataFrame, output_dir: str, *, verbose
             factor_vals = []
             for d in factor_data:
                 val = d["factor_value"]
-                factor_vals.append(float(val.mid) if hasattr(val, "mid") else float(val))
+                factor_vals.append(float(val))
 
             all_means = []
             for prefix, label, color, marker in method_configs:
@@ -471,7 +466,7 @@ def create_factor_comparison_plots(df: pd.DataFrame, output_dir: str, *, verbose
                 ax.set_xscale("log")
 
             y_min, y_max = min(all_means), max(all_means)
-            if metric in ("accuracy", "recall_region_2", "fnr_region_2", "precision_region_2"):
+            if metric in ("accuracy", "f1_region_2", "recall_region_2", "fnr_region_2", "precision_region_2"):
                 pad = max((y_max - y_min) * 0.1, 0.02)
                 ax.set_ylim(max(0.0, y_min - pad), min(1.0, y_max + pad))
             else:
@@ -570,6 +565,17 @@ def analyze_region_stratified(
     df = pd.read_pickle(results_file)
     _log(f"  Loaded {len(df):,} rows × {len(df.columns)} columns in {time.perf_counter() - t0:.1f}s", verbose)
 
+    # Clean up common run artifacts:
+    # - Drop explicit error rows (they otherwise skew averages toward NaN-handling paths).
+    # - Deduplicate by the aspect key (cache mode appends; reruns can create duplicates).
+    pre = len(df)
+    if "error_type" in df.columns:
+        df = df[df["error_type"].isna()].copy()
+    key_cols = ["noise", "sparsity", "rareness", "data_size", "repeat_id"]
+    if all(c in df.columns for c in key_cols) and "simulation_id" in df.columns:
+        df = df.sort_values("simulation_id").drop_duplicates(key_cols, keep="last")
+    _log(f"  After filtering errors/dedup: {len(df):,} rows (dropped {pre - len(df):,})", verbose)
+
     plots_dir = os.path.join(output_dir, "plots")
     tables_dir = os.path.join(output_dir, "tables")
     _log(f"Method comparison plots -> {plots_dir}", verbose)
@@ -592,13 +598,13 @@ def analyze_region_stratified(
 
 
 if __name__ == "__main__":
-    base_dir = str(REPO_ROOT / "outputs" / "simulations" / "Comprehensive_simulation_v3")
-    results_file = os.path.join(base_dir, "aggregated", "v3_lambda_twostep_comparison", "all_simulations_results.pkl")
-    output_dir = os.path.join(base_dir, "aggregated", "v3_lambda_twostep_comparison", "analysis")
+    base_dir = str(REPO_ROOT / "outputs" / "simulations" / "Comprehensive_simulation_v4")
+    results_file = os.path.join(base_dir, "aggregated", "v4_lambda_twostep_comparison", "all_simulations_results.pkl")
+    output_dir = os.path.join(base_dir, "aggregated", "v4_lambda_twostep_comparison", "analysis")
     verbose = "--quiet" not in sys.argv
     if not os.path.exists(results_file):
         print(f"ERROR: {results_file} not found.")
         sys.exit(1)
-    print("Region-stratified v3 analysis (verbose). Pass --quiet to silence progress.", flush=True)
+    print("Region-stratified v4 analysis (verbose). Pass --quiet to silence progress.", flush=True)
     analyze_region_stratified(results_file, output_dir, verbose=verbose)
 

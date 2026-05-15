@@ -16,6 +16,7 @@ dist/
 # Virtual environments
 .env
 .venv
+.dtvenv/
 env/
 venv/
 ENV/
@@ -29,9 +30,14 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Exclude research writing/bibliography/data
+# Generated simulation artifacts and large local outputs
+outputs/
+
+# Research writing and bibliography (local only)
 paper/
 refs/
+
+# Local datasets and agent docs (not for GitHub)
 data/
 ai-doc/
 

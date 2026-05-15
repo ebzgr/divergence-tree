@@ -30,6 +30,7 @@ sys.path.append(os.path.join(PROJECT_ROOT, "src"))
 from divtree.tree import DivergenceTree
 from divtree.tune import tune_with_optuna_holdout
 from twostepdivtree.tree import TwoStepDivergenceTree
+from twostepdivtree.tune import tune_classification_tree_with_optuna_holdout
 
 import config
 sys.path.append(os.path.join(BINARY_COMPARISON_DIR, "comprehensive_simulation"))
@@ -217,10 +218,9 @@ def run_twostep_method(
         twostep = TwoStepDivergenceTree(
             causal_forest_params={**config.TWOSTEP_CAUSAL_FOREST_PARAMS, "random_state": random_seed},
             classification_tree_params={"random_state": random_seed},
-            causal_forest_tune_params={},
         )
         cpu_cf_start = get_cpu_time()
-        twostep.fit(X_tv, T_tv, YF_tv, YC_tv, auto_tune_classification_tree=False, fit_classification_tree=False, verbose=verbose)
+        twostep.fit(X_tv, T_tv, YF_tv, YC_tv, fit_classification_tree=False, verbose=verbose)
         cpu_cf = get_cpu_time() - cpu_cf_start
         base_ct_params = dict(twostep.classification_tree_params)
 
@@ -235,16 +235,24 @@ def run_twostep_method(
         for variant_name, scoring in tuned_variants.items():
             twostep.classification_tree_params = dict(base_ct_params)
             cpu_start = get_cpu_time()
-            twostep._fit_classification_tree_step(
-                X_tv,
-                auto_tune_classification_tree=True,
-                classification_tree_tune_n_trials=config.TWOSTEP_CLASSIFICATION_TUNE_N_TRIALS,
-                classification_tree_tune_n_splits=config.TWOSTEP_CLASSIFICATION_TUNE_N_SPLITS,
-                classification_tree_scoring=scoring,
-                tune_max_leaf_nodes=True,
+            region_types_tv = twostep._categorize_region_types(twostep.tauF_, twostep.tauC_)
+            n_train = X_train.shape[0]
+            region_types_train = region_types_tv[:n_train]
+            region_types_val = region_types_tv[n_train:]
+            tuned_params = tune_classification_tree_with_optuna_holdout(
+                X_train=X_train,
+                y_train=region_types_train,
+                X_val=X_val,
+                y_val=region_types_val,
+                base_params=twostep.classification_tree_params,
+                n_trials=config.TWOSTEP_CLASSIFICATION_TUNE_N_TRIALS,
+                scoring=scoring,
                 max_leaf_nodes_search_space=config.TWOSTEP_CLASSIFICATION_TUNE_MAX_LEAF_NODES,
+                random_state=random_seed,
                 verbose=verbose,
             )
+            twostep.classification_tree_params = tuned_params
+            twostep._fit_classification_tree_step(X_tv, classification_tree_scoring=scoring, verbose=verbose)
             pred_test = twostep.predict_region_type(X_test)
             pred_train = twostep.predict_region_type(X_train)
             variant_preds[variant_name] = {
@@ -259,7 +267,14 @@ def run_twostep_method(
         # cap120
         max_leaf_cap120 = max(2, int(np.ceil(1.2 * n_leaves_divtree0)))
         cpu_cap120_start = get_cpu_time()
-        twostep._fit_classification_tree_step(X_tv, auto_tune_classification_tree=False, max_leaf_nodes=max_leaf_cap120, verbose=verbose)
+        twostep.classification_tree_params = {
+            "random_state": random_seed,
+            "max_leaf_nodes": int(max_leaf_cap120),
+            "max_depth": None,
+            "min_samples_split": 2,
+            "min_samples_leaf": 1,
+        }
+        twostep._fit_classification_tree_step(X_tv, classification_tree_scoring="accuracy", verbose=verbose)
         pred_cap120_test = twostep.predict_region_type(X_test)
         pred_cap120_train = twostep.predict_region_type(X_train)
         n_leaves_cap120 = int((twostep.classification_tree_.tree_.children_left == -1).sum())

@@ -34,6 +34,7 @@ DIVTREE_N_TRIALS = 30
 
 # TwoStep
 TWOSTEP_CAUSAL_FOREST_PARAMS = {
+    # Use all available cores inside CausalForestDML.
     "n_jobs": 1,
     "n_estimators": 100,
     "max_depth": None,

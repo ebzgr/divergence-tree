@@ -42,6 +42,45 @@ def _largest_remainder_counts(total: int, probs: np.ndarray) -> np.ndarray:
     return counts
 
 
+def _total_combinations(n_categories: List[int]) -> int:
+    total = 1
+    for c in n_categories:
+        total *= int(c)
+    return int(total)
+
+
+def _sample_unique_combinations(
+    n_categories: List[int],
+    *,
+    n_samples: int,
+    rng: np.random.Generator,
+) -> List[Tuple[int, ...]]:
+    """
+    Sample unique categorical combinations without enumerating the full cartesian product.
+
+    This is critical when the combination space is enormous (e.g., 2^30).
+    """
+    if n_samples < 1:
+        raise ValueError("n_samples must be >= 1")
+
+    k = len(n_categories)
+    target = int(n_samples)
+    seen: set[Tuple[int, ...]] = set()
+    # Safety to avoid infinite loops when total space is small.
+    max_tries = max(10_000, target * 50)
+    tries = 0
+    while len(seen) < target and tries < max_tries:
+        tries += 1
+        combo = tuple(int(rng.integers(0, n_categories[j])) for j in range(k))
+        seen.add(combo)
+    if len(seen) < target:
+        # Fallback: enumerate (space is likely small enough if uniqueness is failing).
+        all_combos = _generate_all_combinations(n_categories)
+        rng.shuffle(all_combos)
+        return all_combos[:target]
+    return list(seen)
+
+
 def generate_region_stratified_data(
     n_users: int,
     k: int,
@@ -74,16 +113,27 @@ def generate_region_stratified_data(
         raise ValueError("outcome noise std values must be >= 0")
 
     rng = np.random.default_rng(random_seed)
-    all_combinations = _generate_all_combinations(n_categories)
-    total_combinations = len(all_combinations)
+    total_combinations = _total_combinations(n_categories)
     if total_combinations < 4:
         raise ValueError("Need at least 4 combinations to assign all four regions.")
+
+    # If the full combination space is huge, sample a manageable pool of combinations.
+    # This makes k=30 feasible while keeping the region-allocation logic intact.
+    max_combo_pool = 1000
+    if total_combinations > max_combo_pool:
+        all_combinations = _sample_unique_combinations(
+            n_categories, n_samples=max_combo_pool, rng=rng
+        )
+        total_combinations_for_allocation = len(all_combinations)
+    else:
+        all_combinations = _generate_all_combinations(n_categories)
+        total_combinations_for_allocation = len(all_combinations)
 
     # Region 2 fixed by rareness, all others equal.
     p2 = float(rareness_region2)
     p_other = (1.0 - p2) / 3.0
     combo_probs = np.array([p_other, p2, p_other, p_other], dtype=float)
-    combo_counts = _largest_remainder_counts(total_combinations, combo_probs)
+    combo_counts = _largest_remainder_counts(total_combinations_for_allocation, combo_probs)
     for i in range(4):
         if combo_counts[i] == 0:
             j = int(np.argmax(combo_counts))
@@ -92,17 +142,17 @@ def generate_region_stratified_data(
             combo_counts[j] -= 1
             combo_counts[i] += 1
 
-    perm = rng.permutation(total_combinations)
+    perm = rng.permutation(total_combinations_for_allocation)
     s1_idx = perm[: combo_counts[0]]
     s2_idx = perm[combo_counts[0] : combo_counts[0] + combo_counts[1]]
     s3_idx = perm[combo_counts[0] + combo_counts[1] : combo_counts[0] + combo_counts[1] + combo_counts[2]]
     s4_idx = perm[combo_counts[0] + combo_counts[1] + combo_counts[2] :]
 
     region_combo_sets = {
-        1: [all_combinations[i] for i in s1_idx],
-        2: [all_combinations[i] for i in s2_idx],
-        3: [all_combinations[i] for i in s3_idx],
-        4: [all_combinations[i] for i in s4_idx],
+        1: [all_combinations[int(i)] for i in s1_idx],
+        2: [all_combinations[int(i)] for i in s2_idx],
+        3: [all_combinations[int(i)] for i in s3_idx],
+        4: [all_combinations[int(i)] for i in s4_idx],
     }
 
     obs_probs = combo_probs.copy()
@@ -163,8 +213,9 @@ def generate_region_stratified_data(
     YF = baseline_F + tauF * T + eps_F
     YC = baseline_C + tauC * T + eps_C
 
+    # Share is with respect to the allocation pool when sampling is used.
     combo_share_by_region = {
-        r: float(len(region_combo_sets[r]) / total_combinations) for r in [1, 2, 3, 4]
+        r: float(len(region_combo_sets[r]) / total_combinations_for_allocation) for r in [1, 2, 3, 4]
     }
     obs_share_by_region = {
         r: float((region_type == r).mean()) for r in [1, 2, 3, 4]
@@ -194,6 +245,8 @@ def generate_region_stratified_data(
         "obs_share_by_region": obs_share_by_region,
         "combo_counts_by_region": {r: int(len(region_combo_sets[r])) for r in [1, 2, 3, 4]},
         "obs_counts_by_region": {r: int((region_type == r).sum()) for r in [1, 2, 3, 4]},
+        "combo_allocation_total_combinations": int(total_combinations),
+        "combo_allocation_pool_size": int(total_combinations_for_allocation),
         "region_combinations": {
             "region_1": region_combo_sets[1],
             "region_2": region_combo_sets[2],
@@ -202,7 +255,6 @@ def generate_region_stratified_data(
         },
         "baseline_coef_F": baseline_coef_F,
         "baseline_coef_C": baseline_coef_C,
-        "random_seed": random_seed,
     }
 
     return X, T, YF, YC, tauF, tauC, region_type, functional_form

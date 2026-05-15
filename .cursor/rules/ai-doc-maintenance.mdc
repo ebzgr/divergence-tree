@@ -22,7 +22,13 @@ Whenever making meaningful changes, keep `ai-doc/` in sync.
 - If task process changes, update:
   - `ai-doc/08_task_templates.md`
 
+## Doc/code consistency
+
+- When reading or changing code, compare claims in `ai-doc/` (and user-facing comments) to the implementation.
+- If you find a mismatch (grids, paths, flags, semantics), **call it out explicitly** and **resolve it in the same change** when the scope allows: either update `ai-doc/` to match the code, or fix the code if the docs describe the intended behavior and the implementation is wrong. Do not leave known inconsistencies unmentioned.
+
 ## Change checklist
 
 - [ ] Are `ai-doc/` files impacted by this change?
 - [ ] If yes, were the relevant `ai-doc/` files updated in the same change?
+- [ ] If you noticed doc/code drift while working, was it fixed or flagged and tracked?
