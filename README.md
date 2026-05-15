@@ -207,20 +207,18 @@ tauF, tauC = tree.predict_treatment_effects(X)
 - **DivergenceTree**: Direct optimization of joint treatment effects. Better when you want a single unified model and have sufficient data for tuning.
 - **TwoStepDivergenceTree**: Separates effect estimation from classification. Better when you need interpretable treatment effect estimates or want to leverage causal forest's robustness.
 
-## Examples
+## Simulation study (binary features)
 
-### Basic Example
+Install the package, then run from the simulation directory:
 
-`examples/basic.py`: Complete workflow with data generation, hyperparameter tuning, and visualization.
+```bash
+pip install -e .
+cd code/simulations/binary_features
+python lambda_comparison.py
+python analyze_region_stratified.py
+```
 
-### Method Comparison
-
-`simulations/comparison/simulate.py`: Compare both methods on the same dataset. Four independent steps:
-
-1. Generate and save data
-2. Run DivergenceTree, save results
-3. Run TwoStepDivergenceTree, save results
-4. Compare results and visualize
+Aggregated results default to `outputs/simulations/binary_features/aggregated/lambda_twostep_comparison/all_simulations_results.pkl`. Resume with `python lambda_comparison.py --cache`.
 
 ## API Reference
 

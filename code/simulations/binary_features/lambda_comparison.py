@@ -1,5 +1,5 @@
 """
-Region-stratified lambda + TwoStep comparison simulation (v4).
+Region-stratified lambda + TwoStep comparison simulation (binary features).
 
 This script runs a fixed aspect grid with repeats and saves:
 - per-simulation train/val/test dataframes under `outputs/.../data/.../simulation_XXXXXX/`
@@ -21,27 +21,24 @@ Key design points
 import gc
 import hashlib
 import os
-import sys
 import traceback
-from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
 
+from paths import repo_root, setup_binary_features_path
+
+setup_binary_features_path()
+
 import config
+import utils
 from simulation_base import (
     generate_data_with_params,
     run_divtree_method,
     run_twostep_method,
 )
-
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-BINARY_COMPARISON_DIR = os.path.dirname(SCRIPT_DIR)
-REPO_ROOT = next(p for p in Path(SCRIPT_DIR).resolve().parents if (p / "pyproject.toml").exists())
-sys.path.append(os.path.join(BINARY_COMPARISON_DIR, "comprehensive_simulation"))
-import utils
 
 
 def _seed_for(aspect_values: Dict[str, Any], base_random_seed: int) -> int:
@@ -441,7 +438,7 @@ def run_lambda_comparison(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Run v4 lambda + TwoStep grid simulation.")
+    parser = argparse.ArgumentParser(description="Run lambda + TwoStep grid simulation (binary features).")
     parser.add_argument(
         "--cache",
         action="store_true",
@@ -452,7 +449,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    base_dir = str(REPO_ROOT / "outputs" / "simulations" / "Comprehensive_simulation_v4")
+    base_dir = str(repo_root() / "outputs" / "simulations" / "binary_features")
     run_lambda_comparison(
         base_dir=base_dir,
         batch_size=config.DEFAULT_BATCH_SIZE,

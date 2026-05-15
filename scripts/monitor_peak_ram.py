@@ -9,10 +9,10 @@ Use this alongside a long-running simulation to observe:
 Example
 -------
 1) Run simulation in terminal A:
-   python code/simulations/binary_comparison/Comprehensive_simulation_v4/lambda_comparison.py --cache
+   python code/simulations/binary_features/lambda_comparison.py --cache
 
 2) Find parent PID in terminal B:
-   pgrep -af "Comprehensive_simulation_v4/lambda_comparison.py"
+   pgrep -af "binary_features/lambda_comparison.py"
 
 3) Monitor in terminal B:
    python scripts/monitor_peak_ram.py <PID> --include-children

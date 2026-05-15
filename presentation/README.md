@@ -14,7 +14,7 @@ python presentation/extract_data.py
 Or pass the pickle explicitly (relative to repo root):
 
 ```bash
-python presentation/extract_data.py --pkl outputs/simulations/Comprehensive_simulation_v3/aggregated/v3_lambda_twostep_comparison/all_simulations_results.pkl
+python presentation/extract_data.py --pkl outputs/simulations/binary_features/aggregated/lambda_twostep_comparison/all_simulations_results.pkl
 ```
 
 On Linux, an **absolute** path must start with `/`. This is wrong (looks under `./data/...` in the current directory):

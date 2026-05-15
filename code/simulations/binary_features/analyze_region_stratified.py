@@ -1,22 +1,22 @@
 """
-Analysis for region-stratified lambda + TwoStep simulation results (v4).
+Analysis for region-stratified lambda + TwoStep simulation results (binary features).
 """
 
 import json
 import os
 import sys
 import time
-from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-BINARY_COMPARISON_DIR = os.path.dirname(SCRIPT_DIR)
-REPO_ROOT = next(p for p in Path(SCRIPT_DIR).resolve().parents if (p / "pyproject.toml").exists())
-sys.path.append(os.path.join(BINARY_COMPARISON_DIR, "comprehensive_simulation"))
+from paths import repo_root, setup_binary_features_path
+
+setup_binary_features_path()
+
+import config
 import utils
 
 
@@ -598,13 +598,13 @@ def analyze_region_stratified(
 
 
 if __name__ == "__main__":
-    base_dir = str(REPO_ROOT / "outputs" / "simulations" / "Comprehensive_simulation_v4")
-    results_file = os.path.join(base_dir, "aggregated", "v4_lambda_twostep_comparison", "all_simulations_results.pkl")
-    output_dir = os.path.join(base_dir, "aggregated", "v4_lambda_twostep_comparison", "analysis")
+    base_dir = str(repo_root() / "outputs" / "simulations" / "binary_features")
+    results_file = os.path.join(base_dir, "aggregated", config.AGGREGATED_SUBDIR, "all_simulations_results.pkl")
+    output_dir = os.path.join(base_dir, "aggregated", config.AGGREGATED_SUBDIR, "analysis")
     verbose = "--quiet" not in sys.argv
     if not os.path.exists(results_file):
         print(f"ERROR: {results_file} not found.")
         sys.exit(1)
-    print("Region-stratified v4 analysis (verbose). Pass --quiet to silence progress.", flush=True)
+    print("Region-stratified analysis (verbose). Pass --quiet to silence progress.", flush=True)
     analyze_region_stratified(results_file, output_dir, verbose=verbose)
 

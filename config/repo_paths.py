@@ -30,8 +30,12 @@ def code_simulations_dir() -> Path:
     return code_dir() / "simulations"
 
 
-def binary_comparison_dir() -> Path:
-    return code_simulations_dir() / "binary_comparison"
+def binary_features_dir() -> Path:
+    return code_simulations_dir() / "binary_features"
+
+
+def binary_features_dgp_dir() -> Path:
+    return binary_features_dir() / "dgp"
 
 
 def outputs_dir() -> Path:
@@ -41,3 +45,6 @@ def outputs_dir() -> Path:
 def outputs_simulations_dir() -> Path:
     return outputs_dir() / "simulations"
 
+
+def binary_features_outputs_dir() -> Path:
+    return outputs_simulations_dir() / "binary_features"

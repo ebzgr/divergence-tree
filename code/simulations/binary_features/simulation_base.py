@@ -1,17 +1,30 @@
 """
-Base utilities for region-stratified comprehensive simulation v3.
+Base utilities for region-stratified binary-features simulation.
+
+Method wrappers use DivTree and TwoStep from code/src (pip install -e .).
 """
 
 import gc
-import os
-import sys
 import time
+import traceback
 from typing import Any, Dict, Optional
 
 import numpy as np
-import optuna
-from sklearn.metrics import accuracy_score
-from sklearn.tree import DecisionTreeClassifier
+
+from paths import setup_binary_features_path
+
+setup_binary_features_path()
+
+import config
+from dgp import generate_region_stratified_data
+from divtree.tree import DivergenceTree
+from divtree.tune import tune_with_optuna_holdout
+from metrics import compute_all_metrics
+from twostepdivtree.tree import TwoStepDivergenceTree
+from twostepdivtree.tune import (
+    tune_classification_tree_with_optuna_holdout,
+    tune_grf_with_optuna_holdout,
+)
 
 try:
     import resource
@@ -19,28 +32,6 @@ try:
     _HAS_RESOURCE = True
 except ImportError:
     _HAS_RESOURCE = False
-
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-BINARY_COMPARISON_DIR = os.path.dirname(SCRIPT_DIR)
-SIMULATIONS_DIR = os.path.dirname(BINARY_COMPARISON_DIR)
-PROJECT_ROOT = os.path.dirname(SIMULATIONS_DIR)
-
-sys.path.append(os.path.join(BINARY_COMPARISON_DIR))
-from region_stratified_dgp_v3 import generate_region_stratified_data
-
-sys.path.append(os.path.join(PROJECT_ROOT, "src"))
-from divtree.tree import DivergenceTree
-from divtree.tune import tune_with_optuna_holdout
-from twostepdivtree.tree import TwoStepDivergenceTree
-from twostepdivtree.tune import (
-    tune_classification_tree_with_optuna_holdout,
-    tune_grf_with_optuna_holdout,
-)
-
-import config
-
-sys.path.append(os.path.join(BINARY_COMPARISON_DIR, "comprehensive_simulation"))
-from metrics import compute_all_metrics
 
 
 def get_cpu_time() -> float:
@@ -50,194 +41,48 @@ def get_cpu_time() -> float:
     return time.process_time()
 
 
-def _score_region_predictions(
-    y_true: np.ndarray,
-    y_pred: np.ndarray,
-    scoring: str,
-) -> float:
+def _explicit_n_categories_for_sparsity(k: int) -> list[int]:
     """
-    Score region predictions for holdout tuning.
+    Explicit category allocations for sparsity settings.
 
-    Returns values suitable for maximization:
-    - accuracy / recall_region_X: larger is better (0 to 1)
-    - fnr_region_X: returns negative FNR so larger is better
+    The total number of categories is fixed at 30, allocated as:
+    - k=1  -> [30]
+    - k=3  -> [10,10,10]
+    - k=6  -> [5]*6
+    - k=10 -> [3]*10
     """
-    if scoring == "accuracy":
-        return float(accuracy_score(y_true, y_pred))
-
-    if scoring.startswith("recall_region_"):
-        try:
-            target_region = int(scoring.split("_")[-1])
-        except (ValueError, IndexError) as exc:
-            raise ValueError(f"Invalid scoring function: {scoring}") from exc
-        if target_region not in [1, 2, 3, 4]:
-            raise ValueError(f"Invalid scoring function: {scoring}")
-        true_mask = y_true == target_region
-        if true_mask.sum() == 0:
-            return 0.0
-        tp = ((y_pred == target_region) & true_mask).sum()
-        fn = ((y_pred != target_region) & true_mask).sum()
-        return float(tp / (tp + fn)) if (tp + fn) > 0 else 0.0
-
-    if scoring.startswith("fnr_region_"):
-        try:
-            target_region = int(scoring.split("_")[-1])
-        except (ValueError, IndexError) as exc:
-            raise ValueError(f"Invalid scoring function: {scoring}") from exc
-        if target_region not in [1, 2, 3, 4]:
-            raise ValueError(f"Invalid scoring function: {scoring}")
-        true_mask = y_true == target_region
-        if true_mask.sum() == 0:
-            return 0.0
-        fnr = (y_pred[true_mask] != target_region).sum() / true_mask.sum()
-        return float(-fnr)
-
+    k = int(k)
+    if k == 1:
+        return [30]
+    if k == 3:
+        return [10, 10, 10]
+    if k == 6:
+        return [5] * 6
+    if k == 10:
+        return [3] * 10
     raise ValueError(
-        f"Invalid scoring function: {scoring}. Expected 'accuracy', "
-        "'recall_region_X', or 'fnr_region_X' where X is 1-4."
+        f"Unsupported sparsity={k}. Expected one of {sorted(config.SPARSITY_GRID)}."
     )
 
 
-def _tune_twostep_classification_tree_holdout(
-    X_train: np.ndarray,
-    y_train: np.ndarray,
-    X_val: np.ndarray,
-    y_val: np.ndarray,
-    base_params: Dict[str, Any],
-    n_trials: int,
-    scoring: str,
-    max_leaf_nodes_search_space: Dict[str, int],
-    random_state: Optional[int],
-    verbose: bool = False,
-) -> Dict[str, Any]:
-    """
-    Tune second-step classification tree with train/validation holdout.
-    """
-    fixed = dict(base_params)
-    search_space: Dict[str, Dict[str, int]] = {}
-
-    if "max_depth" not in fixed:
-        search_space["max_depth"] = {"low": 2, "high": 15}
-    if "min_samples_split" not in fixed:
-        search_space["min_samples_split"] = {"low": 2, "high": 20}
-    if "min_samples_leaf" not in fixed:
-        search_space["min_samples_leaf"] = {"low": 1, "high": 10}
-    if "max_leaf_nodes" not in fixed:
-        search_space["max_leaf_nodes"] = dict(max_leaf_nodes_search_space)
-
-    if len(search_space) == 0:
-        return fixed
-
-    import optuna.logging
-
-    if verbose:
-        optuna.logging.set_verbosity(optuna.logging.INFO)
-    else:
-        optuna.logging.set_verbosity(optuna.logging.WARNING)
-
-    def objective(trial: optuna.Trial) -> float:
-        params = dict(fixed)
-
-        if "min_samples_leaf" in search_space:
-            min_samples_leaf = trial.suggest_int(
-                "min_samples_leaf",
-                search_space["min_samples_leaf"]["low"],
-                search_space["min_samples_leaf"]["high"],
-            )
-            params["min_samples_leaf"] = min_samples_leaf
-
-        if "min_samples_split" in search_space:
-            min_split_low = search_space["min_samples_split"]["low"]
-            if "min_samples_leaf" in params:
-                min_split_low = max(min_split_low, 2 * int(params["min_samples_leaf"]))
-            min_split_high = search_space["min_samples_split"]["high"]
-            if min_split_low > min_split_high:
-                return -1.0 if scoring.startswith("fnr_region_") else 0.0
-            params["min_samples_split"] = trial.suggest_int(
-                "min_samples_split",
-                min_split_low,
-                min_split_high,
-            )
-
-        for name, bounds in search_space.items():
-            if name in {"min_samples_leaf", "min_samples_split"}:
-                continue
-            params[name] = trial.suggest_int(name, bounds["low"], bounds["high"])
-
-        if "max_leaf_nodes" in params:
-            params["max_depth"] = None
-        if random_state is not None:
-            params["random_state"] = random_state
-
-        try:
-            clf = DecisionTreeClassifier(**params)
-            clf.fit(X_train, y_train)
-            pred_val = clf.predict(X_val)
-            score = _score_region_predictions(y_val, pred_val, scoring=scoring)
-            if not np.isfinite(score):
-                return -1.0 if scoring.startswith("fnr_region_") else 0.0
-            return float(score)
-        except Exception:
-            return -1.0 if scoring.startswith("fnr_region_") else 0.0
-
-    sampler = optuna.samplers.TPESampler(seed=random_state)
-    study = optuna.create_study(direction="maximize", sampler=sampler)
-    study.optimize(objective, n_trials=n_trials, show_progress_bar=verbose)
-
-    best_params = dict(fixed)
-    best_params.update(study.best_trial.params)
-    if "max_leaf_nodes" in best_params:
-        best_params["max_depth"] = None
-    if random_state is not None:
-        best_params["random_state"] = random_state
-    return best_params
-
-
-def _alloc_categories(total_categories: int, k: int) -> list[int]:
-    """
-    Split total_categories across k variables with near-equal counts.
-    Difference between min and max is at most 1.
-    """
-    if k <= 0:
-        raise ValueError("k must be positive")
-    base = total_categories // k
-    rem = total_categories % k
-    return [base + 1 if i < rem else base for i in range(k)]
-
-
-def sample_random_aspects(seed: int) -> Dict[str, Any]:
-    rng = np.random.default_rng(seed)
-    return {
-        # Log-uniform sampling
-        "noise": float(np.exp(rng.uniform(np.log(config.NOISE_MIN), np.log(config.NOISE_MAX)))),
-        "data_size": int(np.exp(rng.uniform(np.log(config.DATA_SIZE_MIN), np.log(config.DATA_SIZE_MAX)))),
-        "sparsity": int(rng.choice(config.SPARSITY_VALUES)),
-        # Uniform share for region 2 on [1%, 50%]
-        "rareness": float(rng.uniform(config.RARENESS_MIN, config.RARENESS_MAX)),
-        # Log-uniform treatment-effect intensity
-        "intensity": float(np.exp(rng.uniform(np.log(config.INTENSITY_MIN), np.log(config.INTENSITY_MAX)))),
-    }
-
-
 def generate_data_with_params(
+    *,
     noise: float,
     sparsity: int,
     rareness: float,
-    intensity: float,
     n_users_train: int,
     n_users_test: int,
     random_seed: int,
 ):
-    n_categories = _alloc_categories(total_categories=30, k=sparsity)
+    n_categories = _explicit_n_categories_for_sparsity(sparsity)
     n_users_total = n_users_train + n_users_test
     X_all, T_all, YF_all, YC_all, _, _, region_type_all, functional_form = generate_region_stratified_data(
         n_users=n_users_total,
         k=sparsity,
         n_categories=n_categories,
         rareness_region2=rareness,
-        intensity=intensity,
+        intensity=config.INTENSITY_FIXED,
         effect_noise_std=config.DEFAULT_EFFECT_NOISE_STD,
-        # v3: noise is additive outcome noise.
         firm_outcome_noise_std=noise,
         user_outcome_noise_std=noise,
         random_seed=random_seed,
@@ -339,13 +184,16 @@ def run_divtree_method(
         else:
             tree = None
             gc.collect()
-    except Exception:
+    except Exception as exc:
         result = {
             "region_type_pred_train": None,
             "region_type_pred_test": None,
             "n_leaves": np.nan,
             "runtime": np.nan,
             "cpu_time": np.nan,
+            "error_type": type(exc).__name__,
+            "error_msg": str(exc),
+            "error_tb": (traceback.format_exc(limit=50) or "")[-8000:],
         }
         for metric in [
             "accuracy",
@@ -383,26 +231,73 @@ def run_twostep_method(
     random_seed: int,
     verbose: bool = False,
     tuned_variants: Optional[Dict[str, str]] = None,
+    causal_forest_params_override: Optional[Dict[str, Any]] = None,
+    causal_forest_tune_params_override: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     result: Dict[str, Any] = {}
     try:
         cf_fixed = {**config.TWOSTEP_CAUSAL_FOREST_PARAMS, "random_state": random_seed, "inference": False}
-        cf_search = config.TWOSTEP_CAUSAL_FOREST_TUNE_PARAMS.get("params", {})
+        if causal_forest_params_override:
+            cf_fixed.update(dict(causal_forest_params_override))
+
+        cf_search = (
+            config.TWOSTEP_CAUSAL_FOREST_TUNE_PARAMS.get("params", {})
+            if causal_forest_tune_params_override is None
+            else dict(causal_forest_tune_params_override).get("params", {})
+        )
 
         cpu_cf_start = get_cpu_time()
-        best_cf_params, _ = tune_grf_with_optuna_holdout(
-            X_train=X_train,
-            T_train=T_train,
-            Y_train=YF_train,
-            X_val=X_val,
-            T_val=T_val,
-            Y_val=YF_val,
+        valid_train_F = ~np.isnan(YF_train)
+        valid_val_F = ~np.isnan(YF_val)
+        best_cf_params_F, _ = tune_grf_with_optuna_holdout(
+            X_train=X_train[valid_train_F],
+            T_train=T_train[valid_train_F],
+            Y_train=YF_train[valid_train_F],
+            X_val=X_val[valid_val_F],
+            T_val=T_val[valid_val_F],
+            Y_val=YF_val[valid_val_F],
             fixed=cf_fixed,
             search_space=cf_search,
-            n_trials=int(config.TWOSTEP_CLASSIFICATION_TUNE_N_TRIALS),
+            n_trials=int(config.TWOSTEP_CAUSAL_FOREST_TUNE_N_TRIALS),
             random_state=random_seed,
             verbose=verbose,
         )
+
+        valid_train_C = ~np.isnan(YC_train)
+        valid_val_C = ~np.isnan(YC_val)
+        best_cf_params_C, _ = tune_grf_with_optuna_holdout(
+            X_train=X_train[valid_train_C],
+            T_train=T_train[valid_train_C],
+            Y_train=YC_train[valid_train_C],
+            X_val=X_val[valid_val_C],
+            T_val=T_val[valid_val_C],
+            Y_val=YC_val[valid_val_C],
+            fixed=cf_fixed,
+            search_space=cf_search,
+            n_trials=int(config.TWOSTEP_CAUSAL_FOREST_TUNE_N_TRIALS),
+            random_state=random_seed,
+            verbose=verbose,
+        )
+
+        twostep_train = TwoStepDivergenceTree(
+            causal_forest_params_F=best_cf_params_F,
+            causal_forest_params_C=best_cf_params_C,
+            classification_tree_params={"random_state": random_seed},
+        )
+        twostep_train.fit(
+            X_train,
+            T_train,
+            YF_train,
+            YC_train,
+            fit_classification_tree=False,
+            drop_forests=False,
+            verbose=verbose,
+        )
+        tauF_train = twostep_train.tauF_
+        tauC_train = twostep_train.tauC_
+        tauF_val, tauC_val = twostep_train.predict_causal_forest_effects(X_val)
+        region_types_train = twostep_train._categorize_region_types(tauF_train, tauC_train)
+        region_types_val = twostep_train._categorize_region_types(tauF_val, tauC_val)
 
         X_tv = np.concatenate([X_train, X_val], axis=0)
         T_tv = np.concatenate([T_train, T_val], axis=0)
@@ -410,12 +305,12 @@ def run_twostep_method(
         YC_tv = np.concatenate([YC_train, YC_val], axis=0)
 
         twostep = TwoStepDivergenceTree(
-            causal_forest_params=best_cf_params,
+            causal_forest_params_F=best_cf_params_F,
+            causal_forest_params_C=best_cf_params_C,
             classification_tree_params={"random_state": random_seed},
         )
         twostep.fit(X_tv, T_tv, YF_tv, YC_tv, fit_classification_tree=False, verbose=verbose)
         cpu_cf = get_cpu_time() - cpu_cf_start
-
         base_ct_params = dict(twostep.classification_tree_params)
 
         if tuned_variants is None:
@@ -426,10 +321,6 @@ def run_twostep_method(
         variant_metrics = {}
         for variant_name, scoring in tuned_variants.items():
             twostep.classification_tree_params = dict(base_ct_params)
-            region_types_tv = twostep._categorize_region_types(twostep.tauF_, twostep.tauC_)
-            n_train = X_train.shape[0]
-            region_types_train = region_types_tv[:n_train]
-            region_types_val = region_types_tv[n_train:]
             cpu_start = get_cpu_time()
             tuned_params = tune_classification_tree_with_optuna_holdout(
                 X_train=X_train,
@@ -472,14 +363,14 @@ def run_twostep_method(
             result[f"{variant_name}_total_cpu_time"] = cpu_cf + variant_cpu[variant_name]
             for k, v in variant_metrics[variant_name].items():
                 result[f"{variant_name}_{k}"] = v
-        # Drop large per-fit arrays before releasing twostep object.
+
         twostep.tauF_ = None
         twostep.tauC_ = None
         twostep.region_types_ = None
         twostep._fit_data = {}
         twostep = None
         gc.collect()
-    except Exception:
+    except Exception as exc:
         result = {
             "twostep_tuned_region_type_pred_train": None,
             "twostep_tuned_region_type_pred_test": None,
@@ -492,6 +383,9 @@ def run_twostep_method(
             "twostep_recall_cpu_time": np.nan,
             "twostep_tuned_total_cpu_time": np.nan,
             "twostep_recall_total_cpu_time": np.nan,
+            "error_type": type(exc).__name__,
+            "error_msg": str(exc),
+            "error_tb": (traceback.format_exc(limit=50) or "")[-8000:],
         }
         for prefix in ["twostep_tuned", "twostep_recall"]:
             for metric in [
@@ -512,34 +406,3 @@ def run_twostep_method(
             ]:
                 result[f"{prefix}_{metric}"] = np.nan
     return result
-
-
-def run_single_task_with_retry(
-    task,
-    base_dir: str,
-    simulation_function: callable,
-    verbose: bool = False,
-) -> Dict[str, Any]:
-    simulation_id, aspect_values, random_seed = task
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            return simulation_function(
-                simulation_id=simulation_id,
-                aspect_values=aspect_values,
-                random_seed=random_seed,
-                base_dir=base_dir,
-                verbose=verbose,
-            )
-        except Exception as exc:
-            is_mem = (
-                isinstance(exc, MemoryError)
-                or "MemoryError" in type(exc).__name__
-                or "Unable to allocate" in str(exc)
-            )
-            if is_mem and attempt < max_retries - 1:
-                gc.collect()
-                time.sleep(60)
-                continue
-            raise
-

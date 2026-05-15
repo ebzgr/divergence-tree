@@ -7,7 +7,7 @@ factor columns and per-method metrics (flat column names matching the DataFrame)
 
 Usage (from repository root, where ``outputs/`` lives):
   python presentation/extract_data.py
-  python presentation/extract_data.py --pkl outputs/simulations/Comprehensive_simulation_v3/aggregated/v3_lambda_twostep_comparison/all_simulations_results.pkl
+  python presentation/extract_data.py --pkl outputs/simulations/binary_features/aggregated/lambda_twostep_comparison/all_simulations_results.pkl
 
 Use an absolute path if the pickle is outside the repo (must start with ``/`` on Linux).
 
@@ -32,9 +32,9 @@ def _standard_pickle_relative() -> Path:
     return (
         Path("outputs")
         / "simulations"
-        / "Comprehensive_simulation_v3"
+        / "binary_features"
         / "aggregated"
-        / "v3_lambda_twostep_comparison"
+        / "lambda_twostep_comparison"
         / "all_simulations_results.pkl"
     )
 
@@ -184,11 +184,11 @@ def main() -> None:
         epilog=(
             "Examples (run from repository root):\n"
             "  %(prog)s\n"
-            "  %(prog)s --pkl outputs/simulations/Comprehensive_simulation_v3/aggregated/"
-            "v3_lambda_twostep_comparison/all_simulations_results.pkl\n"
+            "  %(prog)s --pkl outputs/simulations/binary_features/aggregated/"
+            "lambda_twostep_comparison/all_simulations_results.pkl\n"
             "Absolute path (note the leading /):\n"
-            "  %(prog)s --pkl /data/ebrahim/Projects/DivergenceTree/divergence-tree/outputs/"
-            "simulations/Comprehensive_simulation_v3/aggregated/v3_lambda_twostep_comparison/"
+            "  %(prog)s --pkl /path/to/repo/outputs/"
+            "simulations/binary_features/aggregated/lambda_twostep_comparison/"
             "all_simulations_results.pkl"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,

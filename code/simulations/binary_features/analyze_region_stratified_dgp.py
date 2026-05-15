@@ -1,9 +1,8 @@
 """
-DGP diagnostics for region-stratified simulation (v3).
+DGP diagnostics for region-stratified binary-features simulation.
 """
 
 import os
-from pathlib import Path
 import time
 from typing import Optional
 
@@ -11,10 +10,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from paths import repo_root, setup_binary_features_path
 
-def _repo_root() -> Path:
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    return next(p for p in Path(script_dir).resolve().parents if (p / "pyproject.toml").exists())
+setup_binary_features_path()
+
+import config
 
 
 def _save_hist(series: pd.Series, title: str, out_file: str, log_x: bool = False) -> None:
@@ -226,10 +226,10 @@ def analyze_dgp(
 
 
 if __name__ == "__main__":
-    repo_root = _repo_root()
-    base_dir = str(repo_root / "outputs" / "simulations" / "Comprehensive_simulation_v3")
-    results_file = os.path.join(base_dir, "aggregated", "v3_lambda_twostep_comparison", "all_simulations_results.pkl")
-    output_dir = os.path.join(base_dir, "aggregated", "v3_lambda_twostep_comparison", "analysis", "dgp_diagnostics")
+    root = repo_root()
+    base_dir = str(root / "outputs" / "simulations" / "binary_features")
+    results_file = os.path.join(base_dir, "aggregated", config.AGGREGATED_SUBDIR, "all_simulations_results.pkl")
+    output_dir = os.path.join(base_dir, "aggregated", config.AGGREGATED_SUBDIR, "analysis", "dgp_diagnostics")
     if not os.path.exists(results_file):
         raise FileNotFoundError(f"Results file not found: {results_file}")
     analyze_dgp(results_file, output_dir, verbose=True)
